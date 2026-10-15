@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Eclipse reads Safari's open tabs to show which website is playing, such as YouTube or Netflix, and likes the playing track in Music or on YouTube when you press Like.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Eclipse shows today’s and tomorrow’s events in the notch.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Eclipse says when to leave for an event, from the travel time between here and its place.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Eclipse says when to leave for an event, from the travel time between here and its place.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Andrei Stolojan. GPL v3.</string>
+</dict>
+</plist>

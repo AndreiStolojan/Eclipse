@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="2700" version="1.7">
+<BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="NO" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A10C00000000000000000010" BuildableName="Eclipse.app" BlueprintName="Eclipse" ReferencedContainer="container:NotchLab.xcodeproj"/></BuildActionEntry></BuildActionEntries></BuildAction>
+<LaunchAction buildConfiguration="Release" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="NO"><BuildableProductRunnable runnableDebuggingMode="0"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A10C00000000000000000010" BuildableName="Eclipse.app" BlueprintName="Eclipse" ReferencedContainer="container:NotchLab.xcodeproj"/></BuildableProductRunnable></LaunchAction>
+<ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
+</Scheme>

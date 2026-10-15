@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Notch Lab: eclipse, Pearl</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17181c"/><stop offset="1" stop-color="#000000"/></linearGradient>
+    <clipPath id="body"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <filter id="shadow" color-interpolation-filters="sRGB" x="-10%" y="-10%" width="120%" height="130%"><feGaussianBlur stdDeviation="10"/></filter>
+    <radialGradient id="corona"><stop offset=".55" stop-color="#ffffff"/><stop offset=".62" stop-color="#e4e8f0"/><stop offset=".73" stop-color="#8d97ab" stop-opacity=".55"/><stop offset="1" stop-color="#8d97ab" stop-opacity="0"/></radialGradient>
+    <filter id="blur" color-interpolation-filters="sRGB" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect x="100" y="110" width="824" height="824" rx="185" fill="#000" opacity=".3" filter="url(#shadow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g clip-path="url(#body)">
+    <circle cx="512" cy="500" r="340" fill="url(#corona)"/>
+    <circle cx="512" cy="500" r="206" fill="#000"/>
+    <circle cx="658" cy="354" r="72" fill="#ffffff" opacity=".35" filter="url(#blur)"/>
+    <circle cx="658" cy="354" r="24" fill="#ffffff"/>
+  </g>
+  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#fff" stroke-opacity=".16" stroke-width="4"/>
+</svg>

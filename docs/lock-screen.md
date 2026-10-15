@@ -1,0 +1,67 @@
+# Lock screen
+
+While the Mac is locked, Eclipse shows a lock in the left wing of the closed notch and, with a track loaded, a media widget in the lower part of the main display, above the user picture. A tap on its artwork enlarges it over a wash of its colours. On unlock the shackle opens, the wings retract and the normal notch comes back.
+
+## How it works
+
+`NotchLockMonitor` (`Sources/Notch/NotchLockScreen.swift`) follows the system's signals and feeds `NotchLockState`, a pure state machine the checks drive directly:
+
+| Signal | Source | Effect |
+| --- | --- | --- |
+| `com.apple.screenIsLocked`, `com.apple.screenIsUnlocked` | distributed notifications | when to read the lock state; they can arrive late or out of order, so the session dictionary below decides, and is read once more 0.5 s later if it disagrees |
+| `com.apple.screensaver.didstart`, `didstop` | distributed notifications | windows down while the screen saver runs |
+| `NSWorkspace.willSleep`, `didWake` | workspace | windows down while asleep; on wake the lock state is read again |
+| `NSWorkspace.screensDidSleep`, `screensDidWake` | workspace | windows down while the displays are off |
+| `NSWorkspace.sessionDidResignActive`, `didBecomeActive` | workspace | fast user switching: nothing shows over another user's session; on return the lock state is read again |
+| `CGSessionCopyCurrentDictionary()["CGSSessionScreenIsLocked"]` | public CoreGraphics | the lock state at launch, wake, session return and on each lock notification; the key is present only while locked |
+
+Phases: unlocked, locked, opening (the shackle opens, 0.7 s), retracting (the wings close on the closing spring, 0.5 s), unlocked. A lock wins in any phase, so relocking during the animation goes straight back to locked, and a late timer from the earlier unlock does nothing. An unlock nobody can see, during sleep, the screen saver or with the displays off, skips the animation.
+
+From the moment of locking until the wings have retracted, `NotchExperience.locked` is set and the normal notch is concealed, the same gate a user hide or Mission Control uses. Concealed, the experience refuses hover, clicks, the menu's expand, swipes, file drags and drops, AirDrop, screenshots, indicators, Quick Peeks and T3 Code alerts, and lets macOS handle the volume and brightness keys. The lock screen windows are separate panels whose views only draw the lock and the media, so shelf files, calendar details, T3 Code threads and approvals have no path onto the lock screen. Neither panel can become key, so neither takes the keyboard; the lock wing ignores the mouse, and the widget's window takes clicks only where the widget and the enlarged artwork draw, while they show.
+
+`NotchLockScreenController` (`Sources/Notch/NotchLockScreenView.swift`) owns the panels: the lock wing, the widget and, only while the artwork is enlarged or shrinking back, the wash. The lock goes on the notch's display (the display setting, with its fallbacks). The widget goes on the main display, where macOS shows the user picture and password field. Both follow display changes. After unlock the normal notch returns first and the panels go 0.15 s later, so nothing blinks. Sleep, the screen saver, displays off and a session switch take them down at once.
+
+## Private API
+
+A normal window, at any level, is hidden by the lock screen. To draw above it, `NotchLockSpace` (`Sources/Notch/NotchLockSpace.swift`) uses SkyLight, the private framework behind the window server, the way boring.notch and SkyLightWindow do:
+
+- `SLSMainConnectionID`, the app's window server connection.
+- `SLSSpaceCreate`, `SLSSpaceSetAbsoluteLevel` (400, the level macOS uses for notifications over the lock screen, which sits at 300) and `SLSShowSpaces`, a space above the lock screen.
+- `SLSSpaceAddWindowsAndRemoveFromSpaces`, moving the panels into it.
+- `SLSRemoveWindowsFromSpaces`, `SLSHideSpaces` and `SLSSpaceDestroy`, taking them out and removing the space after unlock.
+- `SLSCopySpacesForWindows`, confirming where a panel landed.
+
+The space is created on each lock and destroyed after each unlock, or as soon as its last window closes (both switches turned off), so repeated locks do not pile up spaces. Nothing here touches authentication, the password field or input: the space only changes where two windows draw.
+
+On macOS 27.2 (26B5091g) all nine symbols resolve. A throwaway process created a space, moved a 1 × 1 transparent panel into it three times in a row, confirmed through `SLSCopySpacesForWindows` that the panel was in it, took it back out (it returned to the user's Space) and destroyed the space; the destroyed space's level reads 0 afterwards. `SLSShowSpaces` and `SLSSpaceAddWindowsAndRemoveFromSpaces` returned 3 even when they worked, so their results are ignored and placement is checked by asking for the panel's spaces instead.
+
+### How it fails on a future macOS
+
+- A symbol renamed or removed: `dlsym` returns nil, `NotchLockSpace.available` is false and the Lock Screen page says "Unavailable on this macOS". The panels stay in the normal window list: the lock screen hides them, the unlock animation shows only after the lock screen fades, and the widget never shows. No crash.
+- A symbol present with a changed signature: undefined behaviour, possibly a crash at lock. Turning both switches off on the Lock Screen page stops every SkyLight call except the symbol lookup.
+- The level or space semantics changed: the panels may not show over the lock screen, or may show under it. `adopt` logs "Could not lift a window above the lock screen" under the `lock` category when the panel is not in the space after the move.
+- macOS may also stop delivering clicks to windows above the lock screen; the widget would then show but not respond.
+
+Read the log with `/usr/bin/log show --predicate 'subsystem == "ro.andrei.NotchLab" AND category == "lock"' --last 10m`.
+
+## Placement
+
+Measured on a 13-inch MacBook Air lock screen (macOS 27.2, 1470 × 956): the date and clock run from 8.5 % to 24.5 % down, the user picture starts 82.6 % down, the name and "Touch ID or Enter Password" end about 95 % down. `NotchLockScreenLayout` takes the clock's bottom as 26 % of the height (at least 250 pt) and the login block's top as the higher of 82 % of the height and 172 pt above the bottom edge, so the widget stays clear whether macOS places the block by proportion or from the bottom.
+
+The widget (340 × 140 pt) sits centred, its bottom 56 pt above the login block, like an iPhone's Now Playing card: 61.5 % to 76 % down on that display. The Vertical offset slider (`lockScreenWidgetOffset`, −160 to +24 pt) moves it up into the band, or down until 32 pt are left above the login block, never further; it never rises into the clock either. The setting replaced `lockScreenOffset`, which counted from 56 % down; the old value is dropped rather than converted.
+
+## Enlarged artwork
+
+A tap on the widget's artwork enlarges it into the band between the clock and the widget (274 pt on that display, at most 420 pt, 32 pt below the clock and above the widget), the way an iPhone's lock screen shows full artwork. It flies from the tile on one spring (0.8 s, a trace of overshoot) while its corners round from 10 to 20 pt and a soft shadow grows; the title slides into the tile's slot. A tap on the large artwork or on the title, or 12 s without a tap, flies it back on a calmer spring. A new track while enlarged crossfades the artwork and the wash and starts the 12 s over. Under Reduce Motion the artwork fades in at its large place and the tile and title stay put. Nothing moves while it rests. "Enlarge artwork on tap" on the Lock Screen page turns it off. Its window keeps 32 pt around the artwork for the shadow and the spring's overshoot, never reaching the clock or the login block; clicks there pass through to the lock screen. A main display too short to hold the widget 32 pt below the clock and 32 pt above the login block (640 × 480, for one) shows no widget, and one that holds the widget but not artwork of at least 104 pt (1280 × 720) does not enlarge it. A change of display, size or offset cuts the enlarged artwork back to the tile at once and stops its timer before the windows move.
+
+Behind it a wash covers the main display: a 3 × 3 mesh gradient of the artwork's region colours, deepened to a brightness between 0.18 and 0.5 so white text over it stays readable, its middle row on the artwork's centre. It fades in over 1 s and out over 0.7 s. The colours come from a 12 × 12 copy of the artwork, read off the main thread once per artwork and kept for up to 24 artworks; the wave's tint in `NotchMedia` was not reused because it is one colour lifted to near white for the closed notch. The wash's window sits above the lock screen like the others, so it cannot go behind the clock and the login block. It fades toward them instead: at most 25 % over the clock, 15 % over the picture, name and prompt, nothing at the menu bar and the bottom edge, full around the artwork. The clock and the login block keep their own colour and contrast, and the wallpaper between takes the artwork's.
+
+Windows and clicks: the widget's window grows to cover the artwork's band only while the artwork is out, then shrinks back once the return has settled (1.1 s). macOS can put its own controls on the login window wherever it likes, such as the Accessibility Keyboard and the accessibility shortcut panel, so the widget's window takes a click only where it draws: inside the widget's rounded shape and on the artwork. The padding, the shadow, the gap above the widget, the corners outside both rounded shapes and a hidden widget pass clicks to the lock screen. The window server does this itself for a transparent window whose `ignoresMouseEvents` was never set: it routes a click by what the window draws, not by its frame, and a shadow or a view at opacity 0 does not count. Setting `ignoresMouseEvents = false` makes the whole frame take clicks, so the widget's window never sets it. A content view whose `hitTest` returns nil does not help: the window server has already given the click to the window, which then drops it. Polling the pointer to switch `ignoresMouseEvents` would wake the app all the time, and splitting into tight windows still leaves the rounded corners and the flight's path. The wash's window ignores the mouse and exists only while the artwork is out or returning. Neither can become key. Both join the SkyLight space like the other windows and leave it when closed one by one or in the teardown after unlock. Unlocking, sleep, the screen saver, the displays going off or the switch turning off cut the artwork back at once with no animation and close the wash, so a relock starts on the tile. Only the playing media's artwork and colours are shown, as before.
+
+## Verification
+
+- Automatic: `NotchLockChecks` covers the state machine (lock, unlock steps, relock during either step, late steps, sleep while locked, sleep during the animation, the screen saver, displays off, session switching, fifty cycles), the monitor's own timing and cancellation, placement on six display sizes against the measured clock and login block, the offset band and its limits, an offset external display, every height from 300 to 1800 pt at five offsets (the widget and the large window clear of the clock and login block, or no widget), the enlarged artwork's band, the wash's opacity over the clock and login block, the enlarged artwork's states (tap, idle, a new track, settling, a tap while shrinking, unlock, sleep and the switch while enlarged, relock, late timers) and the palette. `NotchHoverChecks` covers the experience gate. The checks never post the system's lock notifications, which would reach every app on the Mac.
+- Click routing with `--hit-probe`: the app shows the enlarged stage, then the hidden widget, in a real lock panel at their place on the main display for about a second each and asks the window server (`NSWindow.windowNumber(at:belowWindowWithWindowNumber:)`, the window a mouse-down would reach) about 13 points. The artwork, its edge, the widget's centre, title and edge take the click; the corners outside both curves, the shadow 6 pt below the artwork, the padding beside and above it, the gap above the widget and the hidden widget pass it through. It exits 1 on a mismatch. It runs on the desktop, so it says nothing about the lock screen's own routing; windows moved off screen or faded to near zero report no hit at all, so it has to show on screen.
+- Fixtures with `--render`: `native-lock-wing-locked`, `native-lock-wing-opening`, `native-lock-media-glass`, `-clear`, `-frosted`, `native-lock-scene` (the whole 1470 × 956 screen with the clock and login block as dashed boxes), `native-lock-scene-art`, `native-lock-scene-art-mid` and `native-settings-lock-screen`. Offscreen renders cannot sample what is behind a window, so the glass shows only its dark layer.
+- Seen live, before this placement: the lock wing and the widget over the real lock screen.
+- Not verified: the lowered widget and the enlarged artwork on a real lock screen, including whether the wash's window stacks below the widget inside the SkyLight space, whether the widget's window grows and shrinks without a flicker there, whether the password field and Touch ID stay usable while the artwork is out, and whether clicks pass through the padding and a hidden widget to the lock screen's own controls.
