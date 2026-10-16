@@ -101,6 +101,8 @@ curl -fsSL https://raw.githubusercontent.com/AndreiStolojan/Eclipse/main/install
 
 This installs a separate app called Eclipse Beta, with its own settings and permissions, so it can sit next to the stable one. Run only one of them at a time, since both draw in the same notch. `--beta --uninstall` removes it.
 
+Settings, About shows the version, channel and commit you run. Check for updates there asks GitHub for the newest commit on your channel's branch. If there is a newer one, Update opens Terminal and runs your channel's install command, and Copy command puts that command on the clipboard. Eclipse never checks on its own.
+
 ## Permissions
 
 Eclipse asks for Accessibility once at first launch and for the rest when a feature first needs them. You can say no to any of them; only the feature that needs it stops working.
@@ -120,7 +122,8 @@ Eclipse has no accounts, no server, no analytics and no telemetry. Settings stay
 
 - the favicon of the website playing media, fetched from that website;
 - Spotify artwork and, if you set up Spotify, its Web API for Like and Playlist;
-- Apple Maps travel times, only when time to leave is on and an event has a place.
+- Apple Maps travel times, only when time to leave is on and an event has a place;
+- the update check, only when you press Check for updates: one request to api.github.com for the newest commit on your channel's branch. It carries no account, token or details about your Mac, but GitHub sees your IP address, as any website does.
 
 ## Spotify
 
