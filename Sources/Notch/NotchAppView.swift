@@ -1282,22 +1282,33 @@ private struct NotchAboutPage: View {
         }
     }
 
-    /// Check for updates, then its outcome; with an update available, Update and Copy command take the button's place.
-    private var updateRow: some View {
+    /// Check for updates and its outcome. With an update available, the button gives way to a row of Update and
+    /// Copy command, which do not fit next to the outcome at the window's narrowest.
+    @ViewBuilder private var updateRow: some View {
         HStack(spacing: 8) {
             Text("Updates").font(.system(size: 15))
             Spacer()
             Text(statusText).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
-            if case .available = update.status {
-                Button("Update") { update.install() }.buttonStyle(NotchButtonStyle())
-                Button("Copy command") { update.copyCommand() }.buttonStyle(NotchButtonStyle())
-            } else {
+            if !updateAvailable {
                 Button("Check for updates") { Task { await update.check() } }
                     .buttonStyle(NotchButtonStyle())
                     .disabled(update.status == .checking)
             }
         }
         .padding(.horizontal, 16).frame(height: 50)
+        if updateAvailable {
+            NotchRowDivider()
+            HStack(spacing: 8) {
+                Button("Update") { update.install() }.buttonStyle(NotchButtonStyle())
+                Button("Copy command") { update.copyCommand() }.buttonStyle(NotchButtonStyle())
+                Spacer()
+            }
+            .padding(.horizontal, 16).frame(height: 50)
+        }
+    }
+
+    private var updateAvailable: Bool {
+        if case .available = update.status { true } else { false }
     }
 
     private var statusText: String {
