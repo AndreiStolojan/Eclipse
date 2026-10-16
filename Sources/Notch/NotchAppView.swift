@@ -1251,11 +1251,17 @@ private struct NotchTimerSettingsPage: View {
 
 private struct NotchAboutPage: View {
     @ObservedObject var experience: NotchExperience
+    @StateObject private var update = NotchUpdate()
 
     var body: some View {
         NotchCard {
-            NotchValueRow(label: "Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")
+            NotchValueRow(label: "Version", value: update.build.summary)
             NotchRowDivider()
+            // A local build has no commit to compare, so it offers no check.
+            if update.build.commit != nil {
+                updateRow
+                NotchRowDivider()
+            }
             NotchValueRow(label: "License", value: "GPL v3")
             NotchRowDivider()
             HStack {
@@ -1273,6 +1279,34 @@ private struct NotchAboutPage: View {
                 Spacer()
             }
             .padding(16)
+        }
+    }
+
+    /// Check for updates, then its outcome; with an update available, Update and Copy command take the button's place.
+    private var updateRow: some View {
+        HStack(spacing: 8) {
+            Text("Updates").font(.system(size: 15))
+            Spacer()
+            Text(statusText).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
+            if case .available = update.status {
+                Button("Update") { update.install() }.buttonStyle(NotchButtonStyle())
+                Button("Copy command") { update.copyCommand() }.buttonStyle(NotchButtonStyle())
+            } else {
+                Button("Check for updates") { Task { await update.check() } }
+                    .buttonStyle(NotchButtonStyle())
+                    .disabled(update.status == .checking)
+            }
+        }
+        .padding(.horizontal, 16).frame(height: 50)
+    }
+
+    private var statusText: String {
+        switch update.status {
+        case .idle: ""
+        case .checking: "Checking…"
+        case .upToDate: "Up to date"
+        case .available(let commit): "Update available: \(commit.prefix(7))"
+        case .failed(let reason): reason
         }
     }
 }
