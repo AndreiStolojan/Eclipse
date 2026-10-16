@@ -58,3 +58,6 @@ swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/scripts/notch/Not
 run_check "$repo_dir/.build/checks/message-checks"
 # The CLI shares the parser; compiling it here catches drift between the two.
 swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Tools/notch/main.swift" -o "$repo_dir/.build/checks/notch"
+swiftc "$repo_dir/Sources/Notch/NotchUpdate.swift" "$repo_dir/scripts/notch/NotchUpdateChecks.swift" \
+    -o "$repo_dir/.build/checks/update-checks"
+run_check "$repo_dir/.build/checks/update-checks"
