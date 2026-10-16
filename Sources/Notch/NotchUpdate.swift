@@ -56,7 +56,7 @@ final class NotchUpdate: ObservableObject {
     @Published private(set) var status = NotchUpdateStatus.idle
     let build: NotchBuild
 
-    private static let session = URLSession(configuration: .ephemeral)
+    private static let session = URLSession(configuration: .ephemeral, delegate: NotchNoRedirects(), delegateQueue: nil)
 
     init(build: NotchBuild = .current) {
         self.build = build

@@ -32,7 +32,7 @@ swiftc "$repo_dir/Sources/Notch/NotchGeometry.swift" "$repo_dir/Sources/Notch/No
     "$repo_dir/Sources/Notch/NotchShelf.swift" "$repo_dir/Sources/Notch/NotchClipboard.swift" "$repo_dir/Sources/Notch/NotchFocus.swift" "$repo_dir/Sources/Notch/NotchMediaKey.swift" \
     "$repo_dir/Sources/Notch/NotchScreenshots.swift" "$repo_dir/Sources/Notch/NotchDownloads.swift" "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Sources/Notch/NotchDictation.swift" \
     "$repo_dir/Sources/Notch/NotchAgenda.swift" "$repo_dir/Sources/Notch/NotchVisibility.swift" "$repo_dir/Sources/Notch/NotchAudioDevices.swift" \
-    "$repo_dir/Sources/Notch/NotchAgents.swift" "$repo_dir/Sources/Notch/NotchMarkdown.swift" "$repo_dir/Sources/Notch/NotchT3.swift" \
+    "$repo_dir/Sources/Notch/NotchAgents.swift" "$repo_dir/Sources/Notch/NotchMarkdown.swift" "$repo_dir/Sources/Notch/NotchT3.swift" "$repo_dir/Sources/Notch/NotchNoRedirects.swift" \
     "$repo_dir/Sources/Notch/NotchTrackWatch.swift" "$repo_dir/Sources/Notch/NotchTimer.swift" \
     "$repo_dir/scripts/notch/NotchHoverChecks.swift" -o "$repo_dir/.build/checks/hover-checks"
 run_check "$repo_dir/.build/checks/hover-checks"
@@ -58,6 +58,6 @@ swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/scripts/notch/Not
 run_check "$repo_dir/.build/checks/message-checks"
 # The CLI shares the parser; compiling it here catches drift between the two.
 swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Tools/notch/main.swift" -o "$repo_dir/.build/checks/notch"
-swiftc "$repo_dir/Sources/Notch/NotchUpdate.swift" "$repo_dir/scripts/notch/NotchUpdateChecks.swift" \
+swiftc "$repo_dir/Sources/Notch/NotchUpdate.swift" "$repo_dir/Sources/Notch/NotchNoRedirects.swift" "$repo_dir/scripts/notch/NotchUpdateChecks.swift" \
     -o "$repo_dir/.build/checks/update-checks"
 run_check "$repo_dir/.build/checks/update-checks"

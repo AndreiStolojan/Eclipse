@@ -178,7 +178,7 @@ final class NotchT3: ObservableObject {
         guard let url = components.url, enabled, !rejected, !Task.isCancelled, socket == nil else { return }
         var request = URLRequest(url: url)
         request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization")
-        let session = URLSession(configuration: .ephemeral, delegate: NotchT3NoRedirects(), delegateQueue: nil)
+        let session = URLSession(configuration: .ephemeral, delegate: NotchNoRedirects(), delegateQueue: nil)
         let task = session.webSocketTask(with: request)
         // Snapshots of a hundred threads run to a megabyte.
         task.maximumMessageSize = 16 << 20
@@ -431,12 +431,6 @@ final class NotchT3: ObservableObject {
         details = [:]
         self.status = status
     }
-}
-
-/// Refuses every redirect, so the bearer token in a request never follows one to another address.
-private final class NotchT3NoRedirects: NSObject, URLSessionTaskDelegate {
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest) async -> URLRequest? { nil }
 }
 
 /// The bearer session T3 issued for Eclipse, kept in the login Keychain.
