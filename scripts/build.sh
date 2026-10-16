@@ -22,6 +22,9 @@ else
     app_name="Eclipse" bundle_id="ro.andrei.NotchLab" id_suffix="" name_suffix="" icon_suffix=""
     derived_data="$repo_dir/.build/DerivedData"
 fi
+# The channel and the commit go into Info.plist through build settings, for the update check in Settings. A folder
+# without git builds without a commit, which the app shows as a local build.
+commit="$(git -C "$repo_dir" rev-parse --verify --quiet HEAD 2>/dev/null || true)"
 # ARCH overrides the architecture, for a shell running under Rosetta on Apple silicon.
 arch="${ARCH:-$(uname -m)}"
 mkdir -p "$repo_dir/.build"
@@ -35,6 +38,7 @@ xcodebuild -project "$repo_dir/NotchLab.xcodeproj" -scheme 'Eclipse' -configurat
     -jobs 2 ARCHS="$arch" ONLY_ACTIVE_ARCH=YES \
     CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     CHANNEL_ID_SUFFIX="$id_suffix" CHANNEL_NAME_SUFFIX="$name_suffix" CHANNEL_ICON_SUFFIX="$icon_suffix" \
+    ECLIPSE_CHANNEL="$channel" ECLIPSE_COMMIT="$commit" \
     build > "$repo_dir/.build/build.log" 2>&1 || {
         tail -60 "$repo_dir/.build/build.log" >&2; exit 1;
     }
