@@ -102,9 +102,11 @@ struct NotchSettings: Equatable, Codable {
     var dictationBarScale: Double = 1.2
     /// Off, Eclipse tells Sotto it does not present the dictation, so Sotto shows its own pill at the bottom.
     var dictationInNotch = true
-    /// The link to Sotto, the dictation app. Off by default: the local socket stays closed and Eclipse never presents
-    /// the dictation, whatever `dictationInNotch` says. Turned on with Connect on the Sotto page.
+    /// The link to Sotto, the dictation app. Off by default: Eclipse never presents dictation, whatever
+    /// `dictationInNotch` says. The local socket stays closed unless Sotto or script notices are enabled.
     var sottoLinked = false
+    /// Local script notices, their temporary alerts and their in-memory history. Independent of Sotto, off by default.
+    var scriptNotices = false
     /// Seconds the pointer must rest on the notch before it opens.
     var hoverOpenDelay: Double = 0.1
     /// Seconds the pointer may leave before the notch closes.

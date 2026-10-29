@@ -3,10 +3,10 @@ import AppKit
 /// The outlines the notch can take: the closed wings, the wings widened for an indicator, a timer or the countdown
 /// to an event, those with a small row under them for a timer phase alert, those dropped down for a new screenshot,
 /// a calendar Quick Peek, a finished download, a T3 Code alert, a new track or a finished timer, the small dictation pill, the open player,
-/// the open player grown by a volume or brightness row, and the larger page of one T3 Code thread.
+/// the open player grown by a volume or brightness row, a script notice and its history page, and one T3 Code thread.
 enum NotchShape: Equatable {
     case closed, indicator, timerAlert, screenshot, downloadPeek, eventPeek, agentPeek, trackPeek, timerDone, dictation, open,
-         openLevel, thread
+         openLevel, thread, noticePeek, notifications
 }
 
 /// Places content around the camera housing, or around a simulated cutout of the width in the settings on displays
@@ -107,7 +107,7 @@ struct NotchGeometry: Equatable {
         case .indicator: size.width = min(size.width + 2 * Self.hudWingExtra, screenFrame.width)
         case .screenshot: size = CGSize(width: min(size.width + 2 * Self.hudWingExtra, screenFrame.width),
                                         height: topHeight + Self.screenshotDrop)
-        case .eventPeek: size = CGSize(width: min(size.width + 2 * Self.hudWingExtra, screenFrame.width),
+        case .eventPeek, .noticePeek: size = CGSize(width: min(size.width + 2 * Self.hudWingExtra, screenFrame.width),
                                        height: topHeight + Self.eventPeekDrop)
         case .downloadPeek: size = CGSize(width: min(size.width + 2 * Self.hudWingExtra, screenFrame.width),
                                           height: topHeight + Self.downloadPeekDrop)
@@ -129,6 +129,9 @@ struct NotchGeometry: Equatable {
         // Never narrower than the open notch it grows from.
         case .thread: size = CGSize(width: min(max(threadSize.width, expandedWidth), screenFrame.width),
                                     height: topHeight + max(threadSize.height, expandedBodyHeight))
+        case .notifications:
+            size = CGSize(width: min(max(340, expandedWidth), screenFrame.width),
+                          height: topHeight + max(188, expandedBodyHeight))
         }
         return CGRect(x: screenFrame.midX - size.width / 2, y: screenFrame.maxY - size.height,
                       width: size.width, height: size.height)
@@ -139,8 +142,8 @@ struct NotchGeometry: Equatable {
     /// phase alert, a tight 11 pt for the closed wings.
     func cornerRadius(_ shape: NotchShape) -> CGFloat {
         switch shape {
-        case .open, .openLevel, .thread: expandedCornerRadius
-        case .eventPeek, .downloadPeek, .agentPeek, .timerDone: 24
+        case .open, .openLevel, .thread, .notifications: expandedCornerRadius
+        case .eventPeek, .downloadPeek, .agentPeek, .timerDone, .noticePeek: 24
         case .trackPeek: 18
         case .screenshot: 16
         case .dictation, .timerAlert: 14

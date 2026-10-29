@@ -10,7 +10,7 @@ Include what you found, how to reproduce it and which version or commit you test
 
 Eclipse is a local app. The parts most worth a look:
 
-- the local socket for Sotto (`Sources/Notch/NotchSocket.swift`, `docs/socket.md`), open only while that link is on;
+- the local socket for Sotto and script notices (`Sources/Notch/NotchSocket.swift`, `docs/socket.md`), open only while either integration is on;
 - the Spotify sign-in, a loopback listener on `127.0.0.1:43821` during sign-in only (`Sources/Notch/NotchSpotify.swift`);
 - the T3 Code link and its token in the Keychain (`Sources/Notch/NotchT3.swift`, `docs/t3-code.md`);
 - `install.sh`, which builds and installs the app.

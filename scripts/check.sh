@@ -13,6 +13,7 @@ run_check() {
     return "$status"
 }
 swiftc "$repo_dir/Sources/Notch/NotchGeometry.swift" "$repo_dir/Sources/Notch/NotchSettings.swift" \
+    "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Sources/Notch/NotchNotices.swift" \
     "$repo_dir/Sources/Notch/NotchState.swift" "$repo_dir/Sources/Notch/NotchWebSource.swift" \
     "$repo_dir/Sources/Notch/NotchFocus.swift" "$repo_dir/Sources/Notch/NotchMediaKey.swift" \
     "$repo_dir/Sources/Notch/NotchBattery.swift" "$repo_dir/Sources/Notch/NotchTrackWatch.swift" \
@@ -28,6 +29,7 @@ swiftc "$repo_dir/Sources/Notch/NotchGeometry.swift" "$repo_dir/Sources/Notch/No
     -o "$repo_dir/.build/checks/core-checks"
 run_check "$repo_dir/.build/checks/core-checks"
 swiftc "$repo_dir/Sources/Notch/NotchGeometry.swift" "$repo_dir/Sources/Notch/NotchSettings.swift" \
+    "$repo_dir/Sources/Notch/NotchNotices.swift" \
     "$repo_dir/Sources/Notch/NotchState.swift" "$repo_dir/Sources/Notch/NotchExperience.swift" \
     "$repo_dir/Sources/Notch/NotchShelf.swift" "$repo_dir/Sources/Notch/NotchClipboard.swift" "$repo_dir/Sources/Notch/NotchFocus.swift" "$repo_dir/Sources/Notch/NotchMediaKey.swift" \
     "$repo_dir/Sources/Notch/NotchScreenshots.swift" "$repo_dir/Sources/Notch/NotchDownloads.swift" "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Sources/Notch/NotchDictation.swift" \
@@ -56,8 +58,16 @@ run_check "$repo_dir/.build/checks/clipboard-checks"
 swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/scripts/notch/NotchMessageChecks.swift" \
     -o "$repo_dir/.build/checks/message-checks"
 run_check "$repo_dir/.build/checks/message-checks"
+swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Sources/Notch/NotchNotices.swift" \
+    "$repo_dir/scripts/notch/NotchNoticeChecks.swift" -o "$repo_dir/.build/checks/notice-checks"
+run_check "$repo_dir/.build/checks/notice-checks"
+swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Sources/Notch/NotchDictation.swift" \
+    "$repo_dir/Sources/Notch/NotchSocket.swift" "$repo_dir/scripts/notch/NotchSocketChecks.swift" \
+    -o "$repo_dir/.build/checks/socket-checks"
+run_check "$repo_dir/.build/checks/socket-checks"
 # The CLI shares the parser; compiling it here catches drift between the two.
 swiftc "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Tools/notch/main.swift" -o "$repo_dir/.build/checks/notch"
+run_check python3 "$repo_dir/scripts/notch/NotchCLIChecks.py" "$repo_dir/.build/checks/notch"
 swiftc "$repo_dir/Sources/Notch/NotchUpdate.swift" "$repo_dir/Sources/Notch/NotchNoRedirects.swift" "$repo_dir/scripts/notch/NotchUpdateChecks.swift" \
     -o "$repo_dir/.build/checks/update-checks"
 run_check "$repo_dir/.build/checks/update-checks"

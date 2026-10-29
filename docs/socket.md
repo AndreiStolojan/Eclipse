@@ -1,10 +1,20 @@
 # Local socket and `notch` CLI
 
-Eclipse listens on a Unix domain socket for dictation state from Sotto, the companion dictation app, and for notices from scripts and the terminal. There is no network listener. The socket is open only while Settings > Sotto > Connect is on, which is off by default.
+Eclipse listens on a Unix domain socket for dictation state from Sotto, the companion dictation app, and for notices from scripts and the terminal. There is no network listener. The socket opens when either Settings > Connected apps > Sotto > Connect or Settings > Connected apps > Scripts > Script notices is on. Both are off by default.
 
 Socket: `~/Library/Application Support/Notch Lab/notch.sock` (the folder keeps the app's old name, so Sotto finds it).
 
-Dictation shows as a small pill under the camera. Notices are accepted and validated but not shown yet.
+Dictation shows as a small pill under the camera. Script notices appear briefly below it and stay in the Notifications page, available by swiping through the open notch. Click an alert to open that page.
+
+## Script notices
+
+Turn on Script notices to show notices independently of Sotto. An alert stays for eight seconds of visible time; hover or a higher-priority activity pauses that time. Dictation, screenshots, downloads, system indicators, timer completion, T3 alerts and calendar Quick Peeks take priority. A running timer continues counting.
+
+Up to eight alerts, including the current one, wait in arrival order. At capacity, the oldest waiting alert leaves the queue. Alerts older than 60 seconds expire. The Notifications page keeps the latest 20 entries in memory, including alerts that expired or left the queue. Opening that page marks pending alerts seen. The alert's × dismisses only the alert; each history row's × removes that entry, and Clear removes all entries. Disabling Script notices clears the history and removes its page.
+
+A matching `id` updates the existing history row and pending alert. Identical repeats, including identical payloads without an ID, do not add rows, re-alert or extend the current alert. Changed content for an existing ID starts a new alert if its previous alert has finished. Progress updates change in place. Tint changes appearance, never priority.
+
+Notices received while locked or asleep can enter history but do not alert on return. Locking discards pending alerts. No notice text is drawn on the lock screen; no notice history is written to disk. Timestamps in the list show arrival time without a continuously updating clock.
 
 ## Dictation
 
@@ -22,12 +32,12 @@ Newline-delimited JSON: UTF-8, one object per line, at most 4096 bytes per line 
 | | `detail` | Optional. Same cleaning, cut at 80 characters. Empty: left out. |
 | | `symbol` | Optional SF Symbol name matching `^[a-z0-9]+(\.[a-z0-9]+)*$`, at most 64 characters, else rejected. A name macOS cannot draw falls back to a default in the view. |
 | | `tint` | Optional, default `white`. One of `white green red orange yellow blue teal purple pink`, else rejected. |
-| | `id` | Optional, 1 to 64 characters of `[A-Za-z0-9._-]`, else rejected. A notice with the same `id` as the one showing replaces it. |
+| | `id` | Optional, 1 to 64 characters of `[A-Za-z0-9._-]`, else rejected. The same ID updates an existing history row and pending alert. |
 | | `progress` | Optional number, clamped to 0...1. |
 | `dictation` | `state` | Required: `idle`, `starting`, `recording` or `processing`. |
 | | `level` | Optional number, clamped to 0...1, default 0. |
 
-The connection that most recently sent a `dictation` message is the dictation client. There is one at a time; a new one replaces the old. When it disconnects, the notch returns to idle.
+Only the Sotto opt-in allows dictation. While it is on, the connection that most recently sent a `dictation` message is the dictation client. There is one at a time; a new one replaces the old. When it disconnects, the notch returns to idle. With only Script notices enabled, dictation messages are ignored.
 
 ```json
 {"type":"notify","title":"Build finished","detail":"42 s","symbol":"hammer.fill","tint":"green","id":"build","progress":0.4}
@@ -60,6 +70,7 @@ ln -sf "$PWD/.build/notch" ~/.local/bin/notch   # from the repository; ~/.local/
 
 ```text
 notch [--symbol NAME] [--tint COLOUR] [--id ID] [--progress 0...1] [--socket PATH] [--] TITLE [DETAIL]
+notch --stdin [--socket PATH]
 ```
 
 ```sh
@@ -68,6 +79,10 @@ notch "Upload" --progress 0.4 --id upload
 ```
 
 Options may come before or after the text; `--` ends them, for a title that starts with `--`. It validates with the same parser as the app, sends one line and exits. Exit codes: 0 sent, 1 Eclipse not listening (one line on stderr), 2 invalid input.
+
+`--stdin` reads exactly one notify object, with an optional final newline, and rejects dictation, extra lines, invalid JSON and input over 4096 bytes. It accepts only `--socket` alongside it. The whole input is validated before connecting. Use it to pass JSON through SSH without turning message text into a shell command. See [Pi notices](pi-notices.md) for the contract.
+
+Exit 0 confirms a socket write, not display or durable delivery. Eclipse can drop a notice while its opt-in is off, when rate-limited, or when an alert expires.
 
 ## Long commands in zsh
 
@@ -108,4 +123,4 @@ The CLI cuts the title to 40 characters and turns a multi-line command into one 
 - Each connection's peer user ID is checked with `getpeereid`; anything other than the user running Eclipse is closed.
 - No network listener. Plain text only, with the length, connection and rate limits above.
 - Logs (subsystem `ro.andrei.NotchLab`, category `socket`) record connections and rejection reasons, never message content.
-- Any process running as the same user can still post notices, or become the dictation client: report state and receive `presenting`, `stop` and `cancel`. That is the trade-off of a local, same-user socket. The transcript is never sent over the socket; only state and level are.
+- Any process running as the same user can still post notices while enabled, or become the dictation client while Sotto is enabled: report state and receive `presenting`, `stop` and `cancel`. That is the trade-off of a local, same-user socket. The transcript is never sent over the socket; only state and level are.

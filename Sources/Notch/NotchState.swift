@@ -1,9 +1,9 @@
 import Foundation
 
 /// The views an open notch pages between, in swipe order. Paging wraps: after the last comes the first. The timer
-/// follows Calendar: both are about time, while Shelf and T3 Code are about files and work.
+/// follows Calendar: both are about time, while Shelf, T3 Code and Notifications are about files and work.
 enum NotchActivity: CaseIterable {
-    case music, calendar, timer, shelf, agents
+    case music, calendar, timer, shelf, agents, notifications
 }
 
 /// The open notch's pages as an endless cycle. `turn` counts page turns without wrapping, forward adding one and
@@ -222,6 +222,8 @@ struct NotchState: Equatable {
                     } else if let alert = agentPeek, !dropTargeted {
                         activity = .agents
                         agentThread = alert.thread.id
+                    } else if noticePeek != nil, !dropTargeted {
+                        activity = .notifications
                     }
                     agentPeek = nil
                 }
@@ -253,6 +255,8 @@ struct NotchState: Equatable {
     /// A T3 Code thread entering a phase that alerts: the closed notch drops a row for it, above a Quick Peek
     /// and under everything else. Its timer lives in the experience.
     var agentPeek: NotchAgentAlert?
+    /// A script notice waiting behind dictation, timers and the existing system and app alerts.
+    var noticePeek: NotchNotices.Entry?
     /// The thread whose page replaces the T3 Code list, by ID.
     var agentThread: String?
     /// Drop targets cover the page, and the level row with it.
@@ -292,6 +296,13 @@ struct NotchState: Equatable {
             if !activities.contains(activity) { activity = .music }
         }
     }
+    /// Off, script notices leave the page order and no temporary notice is drawn.
+    var noticesEnabled = false {
+        didSet {
+            if !noticesEnabled { noticePeek = nil }
+            if !activities.contains(activity) { activity = .music }
+        }
+    }
     /// The closed wings count down to the next event. They widen like an indicator, which covers the countdown
     /// while it shows.
     var countdown = false
@@ -310,10 +321,14 @@ struct NotchState: Equatable {
 
     /// The outline to draw: the player wins while open, a thread's page being its larger form, then dictation, then a
     /// screenshot, then a download, then an indicator, a timer phase alert among them, then the timer's Done row, then a T3 alert,
-    /// then a Quick Peek, then a track peek, then a running timer or the calendar countdown. Indicators wait their
+    /// then a Quick Peek, then a script notice, then a track peek, then a running timer or the calendar countdown. Indicators wait their
     /// turn in the experience.
     var shape: NotchShape {
-        if expanded { return showsThread ? .thread : level != nil ? .openLevel : .open }
+        if expanded {
+            if showsThread { return .thread }
+            if activity == .notifications, !dropTargeted { return .notifications }
+            return level != nil ? .openLevel : .open
+        }
         if dictating { return .dictation }
         if screenshot.url != nil { return .screenshot }
         if download != nil { return .downloadPeek }
@@ -321,6 +336,7 @@ struct NotchState: Equatable {
         if timerDone { return .timerDone }
         if agentPeek != nil { return .agentPeek }
         if eventPeek != nil { return .eventPeek }
+        if noticePeek != nil { return .noticePeek }
         if trackPeek != nil { return .trackPeek }
         return countdown || timer ? .indicator : .closed
     }
@@ -329,8 +345,8 @@ struct NotchState: Equatable {
     /// download, a Quick Peek, the timer's Done row, the dictation pill and the drop targets ignore them.
     var acceptsSwipes: Bool {
         switch shape {
-        case .closed, .indicator, .timerAlert, .trackPeek, .open, .openLevel, .thread: !dropTargeted
-        case .screenshot, .downloadPeek, .eventPeek, .agentPeek, .timerDone, .dictation: false
+        case .closed, .indicator, .timerAlert, .trackPeek, .open, .openLevel, .thread, .notifications: !dropTargeted
+        case .screenshot, .downloadPeek, .eventPeek, .agentPeek, .timerDone, .dictation, .noticePeek: false
         }
     }
 
@@ -345,6 +361,7 @@ struct NotchState: Equatable {
     var activities: [NotchActivity] {
         NotchActivity.allCases.filter {
             ($0 != .calendar || calendarEnabled) && ($0 != .timer || timerEnabled) && ($0 != .agents || agentsEnabled)
+                && ($0 != .notifications || noticesEnabled)
         }
     }
 
@@ -352,7 +369,7 @@ struct NotchState: Equatable {
     /// Over a screenshot, a download, a Quick Peek or the timer's Done row it holds them rather than opening the player.
     mutating func hover(_ inside: Bool) {
         guard !pinned, !dropTargeted, !held, !peeking,
-              ![.screenshot, .downloadPeek, .eventPeek, .timerDone].contains(shape) else { return }
+              ![.screenshot, .downloadPeek, .eventPeek, .timerDone, .noticePeek].contains(shape) else { return }
         if dictating {
             dictationHover = inside
             if !inside { expanded = false }
@@ -374,7 +391,7 @@ struct NotchState: Equatable {
     /// or the timer's Done row, where it would only get in the way.
     mutating func peek() -> Bool {
         if peeking { return true }
-        guard !expanded, !dropTargeted, !held, !dictating, screenshot.url == nil, download == nil, eventPeek == nil, agentPeek == nil,
+        guard !expanded, !dropTargeted, !held, !dictating, screenshot.url == nil, download == nil, eventPeek == nil, agentPeek == nil, noticePeek == nil,
               !timerDone else { return false }
         peeking = true
         expanded = true
@@ -392,7 +409,7 @@ struct NotchState: Equatable {
     /// peek would: an open notch already shows the track or something else, and dictation, a screenshot, a download, a
     /// Quick Peek, a T3 alert or the timer's Done row matter more. An indicator only covers it.
     mutating func show(trackPeek track: NotchTrackPeek) -> Bool {
-        guard !expanded, !dropTargeted, !held, !dictating, screenshot.url == nil, download == nil, eventPeek == nil, agentPeek == nil,
+        guard !expanded, !dropTargeted, !held, !dictating, screenshot.url == nil, download == nil, eventPeek == nil, agentPeek == nil, noticePeek == nil,
               !timerDone else { return false }
         trackPeek = track
         return true

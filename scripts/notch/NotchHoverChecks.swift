@@ -58,6 +58,8 @@ import CoreAudio
 /// The real dictation model on a socket that never opens: the checks feed it messages directly.
 @MainActor final class NotchSocket {
     let dictation = NotchDictation()
+    var acceptsDictation = false
+    var onNotice: ((NotchNotice) -> Void)?
     private(set) var listening = false
     func start() { listening = true }
     func stop() { listening = false }
@@ -954,6 +956,56 @@ struct NotchHoverChecks {
         check(!sotto.socket.dictation.presenting, "Stop tells the next client the notch does not present")
         sotto.settings.sottoLinked = false
         check(!sotto.socket.listening, "Unlinking closes the socket")
+        // Script notices have their own opt-in, priority and privacy, independent of Sotto.
+        let scripts = makeExperience(defaults: defaults)
+        scripts.settings.sottoLinked = false
+        scripts.settings.scriptNotices = false
+        scripts.start()
+        let failure = NotchNotice(title: "Pi backup failed", detail: nil, symbol: nil, tint: .red,
+                                  id: "pi.backup", progress: nil)
+        scripts.socket.onNotice?(failure)
+        check(scripts.notices.history.isEmpty && !scripts.socket.listening,
+              "Script notices are off by default and disabled receipts are ignored")
+        scripts.settings.scriptNotices = true
+        check(scripts.socket.listening && !scripts.socket.acceptsDictation && !scripts.settings.sottoLinked,
+              "Notices alone open the socket without opting into dictation")
+        scripts.socket.onNotice?(failure)
+        scripts.socket.onNotice?(failure)
+        check(scripts.state.shape == .noticePeek && scripts.notices.history.count == 1,
+              "The socket callback displays one deduplicated script notice")
+        scripts.hover(true)
+        try await Task.sleep(for: .milliseconds(150))
+        check(!scripts.state.expanded && scripts.state.shape == .noticePeek,
+              "Hover holds an alert without opening the page")
+        scripts.state.timerDone = true
+        check(scripts.state.shape == .timerDone, "Timer completion covers script notices")
+        scripts.state.timerDone = false
+        scripts.settings.sottoLinked = true
+        scripts.socket.dictation.update(NotchDictationUpdate(state: .recording, level: 0.4))
+        check(scripts.state.shape == .dictation && scripts.notices.next != nil,
+              "Dictation covers a script notice and keeps it queued")
+        scripts.socket.dictation.update(NotchDictationUpdate(state: .idle, level: 0))
+        scripts.openNotifications()
+        check(scripts.state.shape == .notifications && scripts.notices.next == nil
+              && scripts.notices.history.count == 1,
+              "Opening Notifications marks pending alerts seen and preserves history")
+        scripts.dismiss()
+        scripts.socket.onNotice?(NotchNotice(title: "Build finished", detail: nil, symbol: nil, tint: .green,
+                                            id: "build", progress: nil))
+        scripts.locked = true
+        check(scripts.state.noticePeek == nil && scripts.notices.next == nil,
+              "Locking discards pending script text")
+        scripts.socket.onNotice?(NotchNotice(title: "During lock", detail: nil, symbol: nil, tint: .white,
+                                            id: "locked", progress: nil))
+        scripts.locked = false
+        check(scripts.state.noticePeek == nil && scripts.notices.history.count == 3,
+              "Notices received while locked stay in history and do not flash on unlock")
+        scripts.settings.sottoLinked = false
+        scripts.settings.scriptNotices = false
+        check(scripts.notices.history.isEmpty && !scripts.socket.listening
+              && !scripts.state.activities.contains(.notifications),
+              "Disabling notices clears history, removes its page and closes the unused socket")
+        scripts.stop()
         // The screenshot peek: 1.5 s, held by the pointer and by its own drag, taken by Shelf or a delivered drag.
         let peeker = makeExperience(defaults: defaults)
         peeker.start()

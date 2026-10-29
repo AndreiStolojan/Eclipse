@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eclipse: variante pentru notificări</title>
+<style>
+*{box-sizing:border-box}body{margin:0;color:var(--foreground,#fff);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}h2{font-size:19px;margin:26px 0 6px;font-weight:650;letter-spacing:-.3px}p{margin:0 0 13px;max-width:76ch}.intro{font-size:15px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.specimen{min-width:0;margin:0}.screen{height:155px;background:#191919;color:#fff;position:relative;border-radius:8px;overflow:hidden;padding:16px}.screen.tall{height:212px}.screen.short{height:106px}.menubar{position:absolute;top:6px;left:13px;right:13px;display:flex;justify-content:space-between;color:#bbb;font-size:9px;line-height:15px}.notch{background:#000;position:absolute;top:0;left:50%;transform:translateX(-50%);width:min(310px,calc(100% - 24px));border-radius:0 0 24px 24px;overflow:hidden}.notch.narrow{width:244px;max-width:calc(100% - 24px);border-radius:0 0 12px 12px}.notch.dictation{width:220px;border-radius:0 0 14px 14px}.camera{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:180px;font-size:11px;white-space:nowrap}.camera>span{display:inline-flex;align-items:center;gap:4px}.camera.empty{display:block}.body{padding:7px 16px 14px}.notice{display:flex;align-items:center;gap:10px;min-width:0}.icon{flex:0 0 24px;width:24px;height:24px;font-size:22px;line-height:22px;text-align:center}.error{color:#ff625a}.ok{color:#73d58b}.warn{color:#ffb852}.text{flex:1;min-width:0}.title{font-size:12px;font-weight:600;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.detail{font-size:10px;color:#aaa;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.close{color:#aaa;font-size:15px;flex:0 0 12px;text-align:right}.track{height:2px;background:#272727;margin:8px 0 0 34px}.fill{width:42%;height:2px;background:#fff}.capt{margin-top:7px;font-size:12px;line-height:1.45;color:var(--foreground,#fff)}.capt b{font-weight:600}.key{font-weight:650}.policy{margin-top:12px;font-size:12px;line-height:1.55}.policy code{font-size:11px}.panelhead{display:flex;align-items:center;justify-content:space-between;font-size:11px;margin:2px 0 10px}.action{font-size:10px;color:#aaa}.row{display:flex;gap:9px;align-items:center;margin:0 0 10px}.row:last-child{margin:0}.row .icon{font-size:17px;width:18px;flex-basis:18px}.meta{font-size:9px;color:#999;white-space:nowrap}.emptybody{text-align:center;padding:20px 16px 27px;font-size:12px}.emptybody span{display:block;color:#999;font-size:10px;margin-top:6px}.bars{height:22px;display:flex;gap:3px;justify-content:center;align-items:center;margin:0 0 7px}.bars i{width:3px;background:white;border-radius:2px}.timerrow{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:6px 16px 15px}.timerrow .timericon{font-size:22px}.timerrow .action{color:#ddd}.desktopline{position:absolute;top:116px;left:16px;font:10px ui-monospace,monospace;color:#777}.recommend{font-size:12px;margin-top:6px}.baseline{margin:0 0 16px}.baseline .notch{width:250px;border-radius:0 0 11px 11px}
+@media(max-width:580px){.grid{grid-template-columns:1fr}.screen{height:144px}.screen.tall{height:205px}h2{font-size:18px}.camera{gap:160px}}
+</style>
+</head>
+<body>
+<p class="intro">Machete statice. Interfața rămâne în engleză, ca în aplicație. Camera ocupă zona centrală de sus. Culorile indică starea; textul spune ce s-a întâmplat.</p>
+<figure class="specimen baseline">
+<div class="screen short" role="img" aria-label="Starea actuală: notch închis, notificările CLI nu apar">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera empty"></div></div>
+</div>
+<figcaption class="capt"><b>Acum.</b> Mesajul ajunge la socket, dar nu apare nimic. Reprezentare statică a stării verificate în cod.</figcaption>
+</figure>
+
+<h2>A. Alertă temporară</h2>
+<p>O singură notificare sub cameră. Următoarele așteaptă; contorul arată câte mai sunt.</p>
+<div class="grid">
+<figure class="specimen">
+<div class="screen" role="img" aria-label="Alertă temporară: Pi backup failed, Repository unavailable, închidere">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera empty"></div><div class="body">
+<div class="notice"><span class="icon error">⊗</span><div class="text"><div class="title">Pi backup failed</div><div class="detail">Repository unavailable</div></div><span class="close">×</span></div>
+</div></div>
+</div>
+<figcaption class="capt"><b>Eroare.</b> Rămâne 8 s. Închidere cu ×; hover oprește expirarea.</figcaption>
+</figure>
+<figure class="specimen">
+<div class="screen" role="img" aria-label="Upload 42%, două notificări în așteptare">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera"><span></span><span>+2</span></div><div class="body">
+<div class="notice"><span class="icon">↑</span><div class="text"><div class="title">Upload</div><div class="detail">42%</div></div><span class="close">×</span></div><div class="track"><div class="fill"></div></div>
+</div></div>
+</div>
+<figcaption class="capt"><b>Actualizare + coadă.</b> Același ID actualizează progresul pe loc. +2 numără doar alte notificări.</figcaption>
+</figure>
+</div>
+<p class="recommend">Recomand A pentru prima versiune. Se potrivește alertelor T3 și descărcărilor existente, fără o pagină nouă.</p>
+
+<h2>B. Indicator compact</h2>
+<p>O pictogramă și un număr în notch-ul închis. Click deschide detaliul; mesajul așteaptă să-l citești.</p>
+<div class="grid">
+<figure class="specimen">
+<div class="screen" role="img" aria-label="Notch compact: pictogramă roșie de eroare, trei notificări necitite">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch narrow"><div class="camera"><span class="error">⊗</span><span>3</span></div></div>
+</div>
+<figcaption class="capt"><b>Discret.</b> Titlul apare doar la click. Un timer în curs își păstrează timpul în aripa dreaptă.</figcaption>
+</figure>
+<figure class="specimen">
+<div class="screen" role="img" aria-label="Detaliu deschis: Pi backup failed, primul din trei, acțiune Dismiss">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera empty"></div><div class="body">
+<div class="panelhead"><span>1 of 3</span><span class="action">Dismiss</span></div>
+<div class="notice"><span class="icon error">⊗</span><div class="text"><div class="title">Pi backup failed</div><div class="detail">Repository unavailable</div></div></div>
+</div></div>
+</div>
+<figcaption class="capt"><b>Citire la cerere.</b> Dismiss trece la următoarea. Duplicatele nu măresc numărul.</figcaption>
+</figure>
+</div>
+
+<h2>C. Listă de notificări</h2>
+<p>Alertele apar pe rând, apoi rămân într-o pagină Notifications. Vezi mai multe rezultate fără să aștepți coada.</p>
+<div class="grid">
+<figure class="specimen">
+<div class="screen tall" role="img" aria-label="Pagina Notifications cu backup eșuat, serviciu restabilit și build terminat">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera empty"></div><div class="body">
+<div class="panelhead"><span>Notifications · 3</span><span class="action">Clear</span></div>
+<div class="row"><span class="icon error">⊗</span><div class="text"><div class="title">Pi backup failed</div><div class="detail">Repository unavailable</div></div><span class="meta">now</span><span class="close">×</span></div>
+<div class="row"><span class="icon ok">✓</span><div class="text"><div class="title">Pi service recovered</div><div class="detail">Health check passed</div></div><span class="meta">2m</span><span class="close">×</span></div>
+<div class="row"><span class="icon ok">✓</span><div class="text"><div class="title">Build finished</div><div class="detail">42 s</div></div><span class="meta">5m</span><span class="close">×</span></div>
+</div></div>
+</div>
+<figcaption class="capt"><b>Coada devine listă.</b> Recuperarea înlocuiește eroarea aceluiași serviciu. Fără rând suplimentar pentru fiecare retry.</figcaption>
+</figure>
+<figure class="specimen">
+<div class="screen tall" role="img" aria-label="Pagina Notifications goală, No notifications, New notices appear here">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera empty"></div><div class="body"><div class="panelhead"><span>Notifications</span></div></div><div class="emptybody">No notifications<span>New notices appear here</span></div></div>
+</div>
+<figcaption class="capt"><b>După Clear.</b> Istoric doar în memorie, cu limită de 20 de ID-uri. O pagină nouă înseamnă implementare mai mare.</figcaption>
+</figure>
+</div>
+
+<h2>Prioritate, în toate variantele</h2>
+<div class="grid">
+<figure class="specimen">
+<div class="screen" role="img" aria-label="Dictare activă: barele Sotto rămân singurul conținut vizibil">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch dictation"><div class="camera empty"></div><div class="bars"><i style="height:6px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:9px"></i><i style="height:20px"></i><i style="height:14px"></i><i style="height:7px"></i><i style="height:16px"></i><i style="height:11px"></i></div></div>
+</div>
+<figcaption class="capt"><b>Dictare.</b> Notificările așteaptă. Barele și comenzile Sotto își păstrează prioritatea.</figcaption>
+</figure>
+<figure class="specimen">
+<div class="screen" role="img" aria-label="Timer terminat: Done, plus un minut și Stop rămân vizibile">
+<div class="menubar"><span>Eclipse</span><span>09:41</span></div>
+<div class="notch"><div class="camera empty"></div><div class="timerrow"><span class="timericon warn">◷</span><b>Done</b><span class="action">+1 min</span><span class="action">Stop</span></div></div>
+</div>
+<figcaption class="capt"><b>Timer terminat.</b> Done apare înaintea notificării. Un timer în curs continuă și în timpul unei alerte.</figcaption>
+</figure>
+</div>
+<p class="policy">Propunere comună: maximum 8 notificări active sau în așteptare, coadă FIFO, înlocuire după ID, fără relansare la duplicate identice. Mesajele așteaptă și în timpul alertelor T3, capturilor și indicatorilor de sistem. Textul notificărilor nu apare pe ecranul blocat. Nicio animație continuă.</p>
+</body>
+</html>

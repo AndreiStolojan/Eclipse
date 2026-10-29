@@ -138,12 +138,13 @@ Eclipse uses the authorization code flow with PKCE, so there is no client secret
 
 ## Optional integrations
 
-Both are off by default and Eclipse works fully without them.
+All are off by default and Eclipse works fully without them.
 
 - **Dictation, with Sotto.** [Sotto](https://github.com/AndreiStolojan/Sotto) is my dictation app, and the two are made to work together. With Settings, Sotto, Connect turned on, Eclipse shows Sotto's recording in the notch instead of Sotto's bottom pill, through a local socket that only your user can reach ([docs/socket.md](docs/socket.md)).
 
   <img src="docs/images/sotto-dictation.png" alt="Sotto's recording bars in the Eclipse notch" width="520">
 - **Agent threads, with T3 Code.** T3 Code is a coding agent app. With Settings, T3 Code, Connect turned on, the notch shows when an agent thread finishes or needs an answer ([docs/t3-code.md](docs/t3-code.md)).
+- **Script notices.** Turn on Settings, Connected apps, Scripts, Script notices to show results from the `notch` CLI. Notifications keeps the latest 20 entries in memory. Matching IDs update the same row, so a recovery can replace a failure ([docs/socket.md](docs/socket.md)). Pi notices can use the same JSON through existing SSH over Tailscale ([docs/pi-notices.md](docs/pi-notices.md)).
 
 ## Building from source
 

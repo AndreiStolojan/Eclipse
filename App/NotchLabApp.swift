@@ -73,10 +73,50 @@ struct NotchLabApp {
         renderDictation(geometry: experience.geometry, in: directory)
         renderCalendar(geometry: experience.geometry, in: directory)
         renderAgents(geometry: experience.geometry, in: directory)
+        renderNotices(geometry: experience.geometry, in: directory)
         renderLockScreen(geometry: experience.geometry ?? .fallback, in: directory)
         renderTimer(geometry: experience.geometry, in: directory)
         renderHero(in: directory)
         print("Native views rendered to \(directory.path)")
+    }
+
+    /// Script notices from fixed data, including duplicate IDs, progress, the list and an empty history.
+    @MainActor
+    private static func renderNotices(geometry: NotchGeometry?, in directory: URL) {
+        let suite = "ro.andrei.NotchLab.RenderNotices"
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var settings = NotchSettings()
+        settings.scriptNotices = true
+        settings.save(to: defaults)
+        let date = Date(timeIntervalSince1970: 1_791_572_460)
+        var notices = NotchNotices()
+        let failure = NotchNotice(title: "Pi backup failed", detail: "Repository unavailable",
+                                  symbol: "exclamationmark.triangle.fill", tint: .red, id: "pi.backup.daily", progress: nil)
+        notices.receive(NotchNotice(title: "Build finished", detail: "42 s", symbol: "hammer.fill",
+                                    tint: .green, id: "build", progress: nil), date: date - 300, alert: false)
+        notices.receive(NotchNotice(title: "Pi service recovered", detail: "Health check passed",
+                                    symbol: "checkmark.circle.fill", tint: .green, id: "pi.service.app", progress: nil),
+                        date: date - 120, alert: false)
+        notices.receive(failure, date: date)
+        notices.receive(failure, date: date)
+        let preview = NotchExperience(notices: notices, defaults: defaults)
+        preview.geometry = geometry
+        render(preview, name: "native-notice-alert", in: directory)
+        renderScene(preview, name: "notice-alert-scene", in: directory)
+        preview.state.expanded = true
+        render(preview, name: "native-notifications", in: directory)
+        renderScene(preview, name: "notifications-scene", in: directory)
+        preview.clearNotices()
+        render(preview, name: "native-notifications-empty", in: directory)
+        preview.state.expanded = false
+        var progress = NotchNotices()
+        progress.receive(NotchNotice(title: "Upload", detail: "42%", symbol: "arrow.up",
+                                    tint: .white, id: "upload", progress: 0.42), date: date)
+        let upload = NotchExperience(notices: progress, defaults: defaults)
+        upload.geometry = geometry
+        render(upload, name: "native-notice-progress", in: directory)
+        renderWindow(NotchAppView(experience: upload, page: .scripts), name: "native-settings-scripts", in: directory)
     }
 
     /// Web video in the open player and the closed wings: Netflix as MediaRemote reports it (only "Netflix", its

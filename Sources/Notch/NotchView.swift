@@ -54,6 +54,10 @@ struct NotchView: View {
                 NotchAgentPeekView(alert: alert, experience: experience, topHeight: topHeight,
                                    wing: (visibleSize.width - geometry.cutoutWidth) / 2, scale: geometry.agentPeekScale)
                     .transition(content)
+            } else if shape == .noticePeek, let entry = experience.state.noticePeek {
+                NotchNoticePeekView(entry: entry, experience: experience, topHeight: topHeight,
+                                    wing: (visibleSize.width - geometry.cutoutWidth) / 2)
+                    .transition(content)
             } else if shape == .timerDone {
                 NotchTimerDoneRow(timer: experience.timer, topHeight: topHeight)
                     .transition(content)
@@ -97,6 +101,7 @@ struct NotchView: View {
         .animation(resize, value: experience.state.eventPeek)
         .animation(resize, value: experience.state.trackPeek)
         .animation(resize, value: experience.state.agentPeek)
+        .animation(resize, value: experience.state.noticePeek?.id)
         .animation(resize, value: experience.state.agentThread)
         .animation(resize, value: experience.state.level)
         .background(NotchLikeWatch(experience: experience, media: experience.media))
@@ -205,6 +210,7 @@ struct NotchView: View {
             case .shelf: NotchShelfView(experience: experience, topHeight: topHeight)
             case .agents: NotchAgentListPage(t3: experience.t3, experience: experience, topHeight: topHeight,
                                              wing: (width - geometry.cutoutWidth) / 2, visible: visible)
+            case .notifications: NotchNotificationsPage(experience: experience, topHeight: topHeight)
             }
         }
         .frame(width: width, height: pageHeight)
@@ -271,6 +277,7 @@ private extension NotchActivity {
         case .shelf: "Shelf"
         case .timer: "Timer"
         case .agents: "T3 Code"
+        case .notifications: "Notifications"
         }
     }
 }
