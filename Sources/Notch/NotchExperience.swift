@@ -53,6 +53,7 @@ final class NotchExperience: ObservableObject {
             }
             // So did dropping a stale Quick Peek or T3 alert.
             if startAgentPeekTime() || startEventPeekTime() { return }
+            syncNotices()
             onLayoutChange?()
         }
     }
@@ -69,7 +70,12 @@ final class NotchExperience: ObservableObject {
     @Published var locked = false {
         didSet {
             updateConcealment()
-            if locked, !oldValue { state.eventPeek = nil; state.agentPeek = nil }
+            if locked, !oldValue {
+                notices.clearPending()
+                state.eventPeek = nil
+                state.agentPeek = nil
+                syncNotices()
+            }
             media.webLookupsPaused = locked
         }
     }
@@ -77,7 +83,7 @@ final class NotchExperience: ObservableObject {
     @Published private(set) var concealed = false
     /// The panel is on screen but cannot be seen: the displays sleep or a window such as the screen saver covers it,
     /// as the window controller reports it. The playing wave stops meanwhile, and no Netflix tab is read for a peek.
-    @Published var obscured = false { didSet { updateMediaWants() } }
+    @Published var obscured = false { didSet { updateMediaWants(); syncNotices() } }
     /// The app window is open and not minimised or fully covered, as its delegate reports it. The settings previews
     /// play only meanwhile.
     @Published var windowVisible = false
@@ -113,7 +119,12 @@ final class NotchExperience: ObservableObject {
                 endTrackPeek()
                 endPeek()
             }
-            if settings.sottoLinked != oldValue.sottoLinked { updateSocket() }
+            if settings.sottoLinked != oldValue.sottoLinked || settings.scriptNotices != oldValue.scriptNotices { updateSocket() }
+            if settings.scriptNotices != oldValue.scriptNotices {
+                if !settings.scriptNotices { notices.clear() }
+                state.noticesEnabled = settings.scriptNotices
+                syncNotices()
+            }
             if settings.dictationInNotch != oldValue.dictationInNotch || settings.sottoLinked != oldValue.sottoLinked {
                 syncDictation()
             }
@@ -138,6 +149,8 @@ final class NotchExperience: ObservableObject {
     let travel: NotchTravel
     /// Outlives `stop()`, so Sotto stays connected through sleep; the window controller closes it at quit.
     let socket: NotchSocket
+    /// Script notice history lasts only for this process and is cleared when its opt-in is turned off.
+    @Published private(set) var notices = NotchNotices()
     let shelf: NotchShelf
     /// Copies kept for the Shelf page's Clipboard list, watched while that setting is on.
     let clipboard: NotchClipboard
@@ -179,6 +192,9 @@ final class NotchExperience: ObservableObject {
     private var agentPeekArrived = ContinuousClock.now
     private var agentPeekStarted = false
     private var timerDoneTask: Task<Void, Never>?
+    private var noticeTask: Task<Void, Never>?
+    private var noticeStarted: (id: NotchNotices.Entry.ID, at: ContinuousClock.Instant)?
+    private var syncingNotices = false
     /// Mirrors the last hover report, so a screenshot or a Quick Peek waits while the pointer is over it.
     private var pointerOver = false
     /// Set while the screenshot thumbnail is being dragged; the panel stays a drop destination meanwhile.
@@ -211,6 +227,7 @@ final class NotchExperience: ObservableObject {
     init(media: NotchMedia? = nil, focus: NotchFocus? = nil, battery: NotchBattery? = nil, socket: NotchSocket? = nil,
          calendar: NotchCalendar? = nil, travel: NotchTravel? = nil, t3: NotchT3? = nil, timer: NotchTimer? = nil,
          screenshots: NotchScreenshots? = nil, downloads: NotchDownloads? = nil, clipboard: NotchClipboard? = nil,
+         notices: NotchNotices = NotchNotices(),
          defaults: UserDefaults = .standard,
          hapticFeedback: @escaping () -> Void = {
              NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
@@ -220,6 +237,7 @@ final class NotchExperience: ObservableObject {
         self.focus = focus ?? NotchFocus()
         self.battery = battery ?? NotchBattery()
         self.socket = socket ?? NotchSocket()
+        self.notices = notices
         self.calendar = calendar ?? NotchCalendar()
         self.travel = travel ?? NotchTravel()
         self.t3 = t3 ?? NotchT3()
@@ -239,6 +257,7 @@ final class NotchExperience: ObservableObject {
         audioDevices.onChange = { [weak self] change in self?.show(.audioDevice(change)) }
         self.media.onTrackChange = { [weak self] newTrack in self?.trackChanged(newTrack: newTrack) }
         self.socket.dictation.onChange = { [weak self] _ in self?.syncDictation() }
+        self.socket.onNotice = { [weak self] notice in self?.receive(notice: notice) }
         self.screenshots.onCapture = { [weak self] url in self?.receive(screenshot: url) }
         self.downloads.onDownload = { [weak self] download in self?.show(download: download) }
         keys.onPress = { [weak self] press in self?.apply(press) ?? false }
@@ -259,6 +278,7 @@ final class NotchExperience: ObservableObject {
         updateCalendar()
         updateAgents()
         updateTimer()
+        state.noticesEnabled = settings.scriptNotices
         updateMediaWants()
     }
 
@@ -291,6 +311,8 @@ final class NotchExperience: ObservableObject {
 
     func stop() {
         running = false
+        notices.clearPending()
+        syncNotices()
         cancelPendingHover()
         dismissHUD()
         state.dismissLevel()
@@ -339,13 +361,14 @@ final class NotchExperience: ObservableObject {
         syncDictation()
         startAgentPeekTime()
         startEventPeekTime()
+        syncNotices()
         onLayoutChange?()
     }
 
-    /// The socket listens only while the Sotto link is on, since only Sotto uses it. Stopping the notch, as for sleep,
-    /// leaves it open; quitting closes it.
+    /// Sotto and script notices independently opt into the same local socket. Sleep leaves it open; quitting closes it.
     private func updateSocket() {
-        if !settings.sottoLinked { socket.stop() } else if running { socket.start() }
+        socket.acceptsDictation = settings.sottoLinked
+        if !settings.sottoLinked && !settings.scriptNotices { socket.stop() } else if running { socket.start() }
     }
 
     /// The notch presents dictation whenever it is on screen, the Sotto link is on and the pill is set to show there,
@@ -783,6 +806,9 @@ final class NotchExperience: ObservableObject {
         case .timerDone:
             if inside { timerDoneTask?.cancel() } else { scheduleTimerDoneEnd() }
             return
+        case .noticePeek:
+            syncNotices()
+            return
         // Hover opens a T3 alert into its thread's page like any closed notch; resting there holds it meanwhile.
         case .agentPeek:
             if inside { agentPeekTask?.cancel() } else { scheduleAgentPeekEnd(); return }
@@ -832,6 +858,68 @@ final class NotchExperience: ObservableObject {
 
     /// Back from a thread's page to the list.
     func closeAgent() { state.agentThread = nil }
+
+    /// Receives validated socket notices even during sleep, keeping history without alerting behind the lock screen.
+    func receive(notice: NotchNotice) {
+        guard settings.scriptNotices else { return }
+        syncNotices()
+        notices.receive(notice, alert: running && !locked && !(state.expanded && state.activity == .notifications))
+        syncNotices()
+        onLayoutChange?()
+    }
+
+    /// Opens the notice list from an alert without waiting for hover or stealing focus from the current app.
+    func openNotifications() {
+        guard running, !concealed, !state.dictating, settings.scriptNotices else { return }
+        cancelPendingHover()
+        state.activity = .notifications
+        state.expanded = true
+    }
+
+    func dismissNoticeAlert() {
+        syncNotices()
+        notices.dismissAlert()
+        syncNotices()
+    }
+
+    func removeNotice(_ id: NotchNotices.Entry.ID) {
+        syncNotices()
+        notices.remove(id)
+        syncNotices()
+    }
+
+    func clearNotices() {
+        notices.clear()
+        syncNotices()
+    }
+
+    /// A single deadline counts only time actually visible. State changes pause it; no timer runs while covered or idle.
+    private func syncNotices() {
+        guard !syncingNotices else { return }
+        syncingNotices = true
+        defer { syncingNotices = false }
+        let now = ContinuousClock.now
+        noticeTask?.cancel()
+        noticeTask = nil
+        if let started = noticeStarted {
+            notices.consume((now - started.at) / .seconds(1), for: started.id)
+            noticeStarted = nil
+        }
+        notices.prune(at: now)
+        if state.expanded, state.activity == .notifications, !state.dropTargeted {
+            notices.clearPending()
+        }
+        state.noticePeek = settings.scriptNotices && !locked ? notices.next : nil
+        guard running, !concealed, !obscured, !pointerOver, state.shape == .noticePeek,
+              let entry = notices.next else { return }
+        noticeStarted = (entry.id, now)
+        let remaining = notices.remaining
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled, let self, self.noticeStarted?.id == entry.id else { return }
+            self.syncNotices()
+        }
+    }
 
     private func cancelPendingHover() {
         hoverTask?.cancel()
@@ -1171,8 +1259,9 @@ final class NotchExperience: ObservableObject {
     private var verticalSwipe: NotchVerticalSwipe? {
         guard settings.swipeToToggle else { return nil }
         if !state.expanded { return .open }
-        // The T3 Code list and a thread's page scroll vertically.
-        if state.held || state.activity == .shelf && shelfScrolls || state.activity == .agents { return nil }
+        // T3 Code and Notifications take vertical scrolls for their lists.
+        if state.held || state.activity == .shelf && shelfScrolls || state.activity == .agents
+            || state.activity == .notifications { return nil }
         return .close
     }
 
@@ -1200,7 +1289,7 @@ final class NotchExperience: ObservableObject {
     /// The pages wrap, so the strip follows the fingers for half a page, then resists and never passes a whole one,
     /// beyond which no neighbour waits. A single page resists from the start, showing there is nothing else.
     private func rubberBanded(_ travel: CGFloat) -> CGFloat {
-        let width = (geometry ?? .fallback).frame(.open).width
+        let width = (geometry ?? .fallback).frame(state.shape).width
         let paging = state.activities.count > 1
         let free = paging ? width / 2 : 0
         let limit = paging ? width / 2 : width * 0.15

@@ -46,6 +46,15 @@ struct NotchMessageChecks {
         check(NotchNotice.validated(title: "x", progress: .infinity) == .failure(.invalid("progress")),
               "Infinite progress is rejected")
         check(NotchMessage.parse(Data([0x7B, 0xFF, 0x7D])) == .failure(.invalidUTF8), "Invalid UTF-8 is rejected")
+        check(NotchMessage.parseNoticeInput(Data(#"{"type":"notify","title":"Done"}"#.utf8))
+              == .success(NotchNotice(title: "Done", detail: nil, symbol: nil, tint: .white, id: nil, progress: nil)),
+              "Stdin accepts a notify object without a final newline")
+        check(NotchMessage.parseNoticeInput(Data("{\"type\":\"dictation\",\"state\":\"recording\"}\n".utf8))
+              == .failure(.unknownType), "Stdin rejects dictation")
+        check(NotchMessage.parseNoticeInput(Data("{\"type\":\"notify\",\"title\":\"a\"}\n{}\n".utf8))
+              == .failure(.malformed), "Stdin rejects extra lines")
+        check(NotchMessage.parseNoticeInput(Data(repeating: 0x20, count: 4097)) == .failure(.oversized),
+              "Stdin limits the entire input, including its newline")
         check(parse(#"{"type":"shout","title":"x"}"#) == .failure(.unknownType), "Unknown type is rejected")
         check(parse(#"{"title":"x"}"#) == .failure(.missing("type")) && parse(#"{"type":"notify"}"#) == .failure(.missing("title"))
               && parse(#"{"type":"dictation"}"#) == .failure(.missing("state")), "Missing fields are named")
@@ -73,6 +82,9 @@ struct NotchMessageChecks {
         check(String(decoding: line, as: UTF8.self)
               == #"{"detail":"3 \"quoted\"","id":"ci","progress":1,"symbol":"checkmark","tint":"teal","title":"Tests/passed","type":"notify"}"# + "\n"
               && NotchMessage.parse(line.dropLast()) == .success(.notify(sent)), "Notify encodes one line that parses back")
+
+        check(NotchUnixSocket.address("/tmp/n.sock") != nil && NotchUnixSocket.address("/tmp/n\u{0}.sock") == nil
+              && NotchUnixSocket.address("") == nil, "Socket paths with a NUL or no bytes have no address")
 
         var limit = NotchRateLimit()
         check((0..<60).allSatisfy { _ in limit.allow(at: 0) } && !limit.allow(at: 0), "Rate limit allows a burst of 60")

@@ -9,8 +9,8 @@ enum NotchTint: String, CaseIterable, Sendable {
 }
 
 /// A notification for the closed notch, already sanitised: plain single-line text within the length limits, a
-/// symbol name that looks like an SF Symbol, progress within 0...1. A notice with the same `id` as the one showing
-/// replaces it.
+/// symbol name that looks like an SF Symbol, progress within 0...1. Matching IDs update the same history row and
+/// pending alert.
 struct NotchNotice: Equatable, Sendable {
     let title: String
     let detail: String?
@@ -116,6 +116,17 @@ enum NotchMessage: Equatable, Sendable {
         }
     }
 
+    /// One bounded stdin payload for SSH forwarding. Only notify is allowed, with an optional final newline.
+    static func parseNoticeInput(_ input: Data) -> Result<NotchNotice, NotchRejection> {
+        guard input.count <= maxLine else { return .failure(.oversized) }
+        let line = input.last == 0x0A ? Data(input.dropLast()) : input
+        guard !line.contains(0x0A) else { return .failure(.malformed) }
+        return parse(line).flatMap { message in
+            guard case .notify(let notice) = message else { return .failure(.unknownType) }
+            return .success(notice)
+        }
+    }
+
     /// The message as one line ready to write, newline included; absent optional fields are left out.
     var line: Data {
         let wire = switch self {
@@ -214,12 +225,13 @@ enum NotchUnixSocket {
     static let defaultPath = FileManager.default.homeDirectoryForCurrentUser
         .appending(path: "Library/Application Support/Notch Lab/notch.sock").path
 
-    /// A socket address for `path`, or nil when the path does not fit (about 103 bytes).
+    /// A socket address for `path`, or nil when the path is empty, does not fit (about 103 bytes) or holds a NUL,
+    /// which would silently shorten it to another path.
     static func address(_ path: String) -> sockaddr_un? {
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         let bytes = Array(path.utf8)
-        guard !bytes.isEmpty, bytes.count < MemoryLayout.size(ofValue: address.sun_path) else { return nil }
+        guard !bytes.isEmpty, !bytes.contains(0), bytes.count < MemoryLayout.size(ofValue: address.sun_path) else { return nil }
         withUnsafeMutableBytes(of: &address.sun_path) { buffer in buffer.copyBytes(from: bytes) }
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
         return address

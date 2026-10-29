@@ -13,6 +13,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
     case display = "Display"
     case sound = "Sound"
     case downloads = "Downloads"
+    case scripts = "Scripts"
     case nowPlaying = "Now Playing"
     case calendar = "Calendar"
     case timers = "Timers"
@@ -28,7 +29,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         (nil, [.general]),
         ("Notifications", [.battery, .connectivity, .focus, .display, .sound, .downloads]),
         ("Live Activities", [.nowPlaying, .calendar, .timers, .shelf, .lockScreen]),
-        ("Connected apps", [.sotto, .t3]),
+        ("Connected apps", [.sotto, .t3, .scripts]),
         ("Eclipse", [.about])
     ]
 
@@ -51,6 +52,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .lockScreen: "lock.fill"
         case .sotto: "waveform"
         case .t3: "terminal.fill"
+        case .scripts: "bell.fill"
         case .about: "info.circle.fill"
         }
     }
@@ -69,7 +71,7 @@ enum NotchPage: String, CaseIterable, Identifiable {
         case .shelf: Color(nsColor: .systemBlue)
         case .lockScreen: Color(white: 0.3)
         case .sotto: Color(red: 0.25, green: 0.72, blue: 0.65)
-        case .t3: Color(nsColor: .systemIndigo)
+        case .t3, .scripts: Color(nsColor: .systemIndigo)
         }
     }
 }
@@ -112,6 +114,12 @@ struct NotchAppView: View {
                         case .shelf: NotchShelfSettingsPage(experience: experience)
                         case .sotto: NotchSottoPage(experience: experience)
                         case .t3: NotchT3Page(experience: experience)
+                        case .scripts:
+                            NotchCard {
+                                NotchToggleRow(label: "Script notices", isOn: $experience.settings.scriptNotices)
+                            }
+                            Text("Local notices appear briefly and stay in Notifications until cleared or Eclipse quits. Keeps the latest 20.")
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
                         case .about: NotchAboutPage(experience: experience)
                         }
                     }

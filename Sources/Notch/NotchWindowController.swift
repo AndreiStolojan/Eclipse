@@ -124,6 +124,7 @@ final class NotchWindowController {
         let frame = geometry.frame(.openLevel).union(geometry.frame(.indicator)).union(geometry.frame(.screenshot))
             .union(geometry.frame(.eventPeek)).union(geometry.frame(.agentPeek)).union(geometry.frame(.trackPeek))
             .union(geometry.frame(.dictation))
+            .union(geometry.frame(.noticePeek)).union(geometry.frame(.notifications))
             .union(geometry.frame(.thread)).union(geometry.frame(.timerAlert)).union(geometry.frame(.timerDone))
         if panel == nil {
             let newPanel = NotchMusicPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)

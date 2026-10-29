@@ -4,7 +4,7 @@ import Foundation
 import os
 
 /// The local socket other programs post to: notices from scripts and the `notch` CLI, dictation state from Sotto.
-/// Open only while the Sotto link is on.
+/// Open only while Sotto or script notices are enabled.
 /// A Unix domain socket in a private folder, accepting only processes of the same user; no network listener. IO runs
 /// on a background queue, driven by dispatch sources, so nothing runs while the socket is idle; parsed messages hop
 /// to the main actor. Protocol and security model: docs/socket.md.
@@ -14,6 +14,16 @@ final class NotchSocket: ObservableObject {
     @Published private(set) var notice: NotchNotice?
     /// Called after every notice, including one that repeats the current notice's `id`.
     var onNotice: ((NotchNotice) -> Void)?
+    /// Opening the socket for script notices does not opt into Sotto's dictation protocol.
+    var acceptsDictation = false {
+        didSet {
+            if !acceptsDictation {
+                dictation.presenting = false
+                dictationClient = nil
+                dictation.detach()
+            }
+        }
+    }
     let dictation = NotchDictation()
     let path: String
     private let server: NotchSocketServer
@@ -68,6 +78,7 @@ final class NotchSocket: ObservableObject {
             self.notice = notice
             onNotice?(notice)
         case .message(let id, .dictation(let update)):
+            guard acceptsDictation else { return }
             if dictationClient != id {
                 dictationClient = id
                 dictation.attach { [server] reply in server.send(reply.line, to: id) }
@@ -122,7 +133,7 @@ private final class NotchSocketServer: @unchecked Sendable {
             guard listener == nil, let fd = listen() else { return }
             self.handler = handler
             let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
-            source.setEventHandler { [weak self] in self?.acceptAll(fd) }
+            source.setEventHandler { [weak self] in self?.acceptOne(fd) }
             source.setCancelHandler { close(fd) }
             source.resume()
             listener = source
@@ -224,17 +235,15 @@ private final class NotchSocketServer: @unchecked Sendable {
         return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0
     }
 
-    private func acceptAll(_ listenerFD: Int32) {
-        while true {
-            let fd = accept(listenerFD, nil, nil)
-            if fd >= 0 {
-                admit(fd)
-            } else if errno == EINTR || errno == ECONNABORTED {
-                continue
-            } else {
-                if errno != EAGAIN { log.error("accept failed (\(String(cString: strerror(errno)), privacy: .public))") }
-                return
-            }
+    /// Takes one pending client per event. The source fires again while more wait, so a flood of connections takes
+    /// turns with reads, replies and `stop` on the queue instead of holding it.
+    private func acceptOne(_ listenerFD: Int32) {
+        var fd: Int32
+        repeat { fd = accept(listenerFD, nil, nil) } while fd < 0 && errno == EINTR
+        if fd >= 0 {
+            admit(fd)
+        } else if errno != EAGAIN && errno != ECONNABORTED {
+            log.error("accept failed (\(String(cString: strerror(errno)), privacy: .public))")
         }
     }
 
@@ -264,29 +273,29 @@ private final class NotchSocketServer: @unchecked Sendable {
         log.info("Client \(id) connected")
     }
 
-    /// Reads whatever arrived and handles each complete line. A line, or an unfinished one, longer than the limit
-    /// closes the connection, which also keeps the buffer small.
+    /// Reads one chunk of at most `maxLine` bytes and handles each complete line in it. The source fires again while
+    /// more is waiting, so a client that never stops writing takes turns with the others and with `stop` rather than
+    /// holding the queue. A line, or an unfinished one, longer than the limit closes the connection, which also keeps
+    /// the buffer small.
     private func receive(_ id: ConnectionID) {
         guard let connection = connections[id] else { return }
         var chunk = [UInt8](repeating: 0, count: NotchMessage.maxLine)
-        while true {
-            let count = read(connection.fd, &chunk, chunk.count)
-            if count < 0, errno == EINTR { continue }
-            if count < 0, errno == EAGAIN { return }
-            guard count > 0 else {
-                log.info("Client \(id) disconnected")
-                drop(id)
-                return
-            }
-            connection.buffer.append(contentsOf: chunk[0..<count])
-            while let newline = connection.buffer.firstIndex(of: 0x0A) {
-                let line = Data(connection.buffer[connection.buffer.startIndex..<newline])
-                connection.buffer.removeSubrange(connection.buffer.startIndex...newline)
-                guard line.count < NotchMessage.maxLine else { return oversized(id) }
-                handle(line, from: id, connection)
-            }
-            guard connection.buffer.count < NotchMessage.maxLine else { return oversized(id) }
+        var count: Int
+        repeat { count = read(connection.fd, &chunk, chunk.count) } while count < 0 && errno == EINTR
+        if count < 0, errno == EAGAIN { return }
+        guard count > 0 else {
+            log.info("Client \(id) disconnected")
+            drop(id)
+            return
         }
+        connection.buffer.append(contentsOf: chunk[0..<count])
+        while let newline = connection.buffer.firstIndex(of: 0x0A) {
+            let line = Data(connection.buffer[connection.buffer.startIndex..<newline])
+            connection.buffer.removeSubrange(connection.buffer.startIndex...newline)
+            guard line.count < NotchMessage.maxLine else { return oversized(id) }
+            handle(line, from: id, connection)
+        }
+        guard connection.buffer.count < NotchMessage.maxLine else { return oversized(id) }
     }
 
     private func oversized(_ id: ConnectionID) {
