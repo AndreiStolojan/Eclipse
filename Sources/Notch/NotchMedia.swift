@@ -309,7 +309,8 @@ final class NotchMedia: ObservableObject {
     /// told. Any other player is never confirmed, since nothing tells its sound from a call's.
     private func plays(_ app: String, report: TrackInfo.Payload) async -> Bool? {
         if NotchScriptedPlayer.notifications[app] != nil {
-            guard let player = await Self.read(app) else { return nil }
+            // A read the pick dropped meanwhile, or one that outlived locking or stopping, changes nothing.
+            guard let player = await Self.read(app), !Task.isCancelled else { return nil }
             refresh(app, with: player)
             return player.playing
         }
@@ -339,10 +340,11 @@ final class NotchMedia: ObservableObject {
     }
 
     /// Reads Spotify or Music again while it is followed beside the system's player, replacing a read under way; not
-    /// while the Mac is locked. What it says also settles whether it plays, so a pause reported while it is still
-    /// heard shows at once.
+    /// while the Mac is locked, nor once it is no longer followed. What it says also settles whether it plays, so a
+    /// pause reported while it is still heard shows at once.
     private func readPlayer(_ app: String) {
-        guard NotchScriptedPlayer.notifications[app] != nil, !webLookupsPaused else { return }
+        guard running, case .other(app, _) = pick.followed, NotchScriptedPlayer.notifications[app] != nil,
+              !webLookupsPaused else { return }
         playerRead?.cancel()
         playerRead = Task { [weak self] in
             guard let player = await Self.read(app), !Task.isCancelled, let self else { return }
@@ -770,7 +772,7 @@ final class NotchMedia: ObservableObject {
 
     /// Sends a transport command to the shown player: through MediaRemote to the system's, through AppleScript to
     /// Spotify or Music followed beside it, which asks for the Automation permission on the first press and is read
-    /// again once the command ran, in case its notification does not come.
+    /// again once the command ran, in case its notification does not come and it is still followed.
     private func command(_ script: String, system: () -> Void) {
         switch pick.followed {
         case .system: system()

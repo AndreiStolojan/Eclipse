@@ -7,6 +7,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "$0")/.." && pwd)"
 bundle_id="ro.andrei.NotchLab.render"
 out_dir="$repo_dir/.build/renders"
+mkdir -p "$repo_dir/.build"
 xcodebuild -project "$repo_dir/NotchLab.xcodeproj" -scheme 'Eclipse' -configuration Debug \
     -derivedDataPath "$repo_dir/.build/RenderData" -clonedSourcePackagesDirPath "$repo_dir/.build/SourcePackages" \
     ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= \
@@ -27,7 +28,11 @@ readme_images=(
     readme-downloads:downloads.png
     native-lock-media-glass:lock-screen.png
 )
-rm -rf "$repo_dir/docs/images"
+# Only these files are replaced; other images in docs/images, such as Sotto's, are not renders. All must exist first,
+# so a missing render changes nothing.
+for pair in "${readme_images[@]}"; do
+    [[ -f "$out_dir/${pair%%:*}.png" ]] || { echo "The render ${pair%%:*}.png is missing." >&2; exit 1; }
+done
 mkdir -p "$repo_dir/docs/images"
 for pair in "${readme_images[@]}"; do
     cp "$out_dir/${pair%%:*}.png" "$repo_dir/docs/images/${pair#*:}"

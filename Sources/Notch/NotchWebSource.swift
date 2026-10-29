@@ -377,11 +377,21 @@ enum NotchWebSites {
     /// is cancelled; cancelling it or `timeout` passing terminates the script, so no Apple Events outlive the read.
     static func osascript(_ source: String, arguments: [String] = [],
                           timeout: TimeInterval = 5) async -> (status: Int32, output: String, error: String) {
-        let script = NotchScript(source: source, arguments: arguments)
+        let script = NotchProcess(executable: URL(fileURLWithPath: "/usr/bin/osascript"), arguments: ["-e", source] + arguments)
         return await withTaskCancellationHandler {
-            await Task.detached { script.run(timeout: timeout) }.value
+            await Task.detached { () -> (status: Int32, output: String, error: String) in
+                do {
+                    let result = try script.run(timeout: timeout)
+                    let errors = result.signalled ? "Stopped" : String(decoding: result.errors, as: UTF8.self)
+                    return (result.status, String(decoding: result.output, as: UTF8.self), errors)
+                } catch NotchProcess.Failure.cancelled {
+                    return (-1, "", "Cancelled")
+                } catch {
+                    return (-1, "", error.localizedDescription)
+                }
+            }.value
         } onCancel: {
-            script.cancel()
+            script.stop()
         }
     }
 
@@ -394,46 +404,5 @@ enum NotchWebSites {
         guard let (data, _) = try? await URLSession.shared.data(for: request), let image = NSImage(data: data) else { return nil }
         icons[host] = image
         return image
-    }
-}
-
-/// One `osascript` run that can be stopped from another thread: before launch it never starts, after it terminates.
-private final class NotchScript: @unchecked Sendable {
-    private let process = Process()
-    private let lock = NSLock()
-    private var stopped = false
-
-    init(source: String, arguments: [String]) {
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", source] + arguments
-    }
-
-    /// Blocks until the script exits or is stopped, at the latest `timeout` after it starts.
-    func run(timeout: TimeInterval) -> (status: Int32, output: String, error: String) {
-        let output = Pipe(), errors = Pipe()
-        process.standardOutput = output
-        process.standardError = errors
-        let launched: Result<Void, Error>? = lock.withLock {
-            stopped ? nil : Result { try process.run() }
-        }
-        switch launched {
-        case nil: return (-1, "", "Cancelled")
-        case .failure(let error): return (-1, "", error.localizedDescription)
-        case .success: break
-        }
-        DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { [weak self] in self?.cancel() }
-        // Reading to the end first keeps a long output from filling the pipe and stalling the script.
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        let errorText = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        process.waitUntilExit()
-        let stopped = process.terminationReason == .uncaughtSignal
-        return (process.terminationStatus, String(decoding: data, as: UTF8.self), stopped ? "Stopped" : errorText)
-    }
-
-    func cancel() {
-        lock.withLock {
-            stopped = true
-            if process.isRunning { process.terminate() }
-        }
     }
 }

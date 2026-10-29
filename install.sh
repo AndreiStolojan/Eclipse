@@ -204,6 +204,9 @@ prepare_source() {
 choose_destination() {
     dest="$(installed_path)"
     if [[ -n "$dest" ]]; then
+        # swap_in refuses a link, so refuse it here, before the download and build.
+        [[ ! -L "$dest" ]] || fail "$dest is a symbolic link. The installer only replaces a real app folder.
+       Remove the link and run this again."
         # Ownership, not `-w` on the bundle: macOS briefly denies writes to an app it is checking right after launch.
         [[ -w "$(dirname "$dest")" && -O "$dest" ]] || fail "$app_name is installed at $dest, which this user cannot replace without admin rights.
        Delete it, or move it to a folder you can write to, then run this again."

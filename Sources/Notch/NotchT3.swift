@@ -65,6 +65,10 @@ final class NotchT3: ObservableObject {
     private var connectGeneration = 0
     /// One issuance at a time, shared by attempts, so a quick off and on cannot mint two sessions.
     private var issuing: Task<NotchT3Credential?, Never>?
+    /// Bumped by Forget, so a credential that arrives after it is revoked rather than cached.
+    private var credentialGeneration = 0
+    /// Forget's revocation; a later issuance waits for it, so its Keychain deletion cannot remove the new session.
+    private var forgetting: Task<Void, Never>?
     /// Set when T3 refused the token; cleared when Connect is turned on again.
     private var rejected = false
     /// The `subscribeShell` request; its end means the list stopped following T3.
@@ -77,6 +81,9 @@ final class NotchT3: ObservableObject {
     private var retries = 0
     private var fetching: Set<String> = []
     private var refetch: Set<String> = []
+    /// Bumped whenever the socket drops, so a detail fetch from an older connection neither publishes nor touches the
+    /// fetch state of a newer one.
+    private var link = 0
     private var presence: NSKeyValueObservation?
     private let log = Logger(subsystem: "ro.andrei.NotchLab", category: "t3")
 
@@ -117,10 +124,13 @@ final class NotchT3: ObservableObject {
     func forget() {
         let cached = credentialCache
         // A token still being issued is revoked too once it arrives.
-        let pending = issuing
+        let pending = issuing, previous = forgetting
         credentialCache = nil
+        issuing = nil
+        credentialGeneration += 1
         disconnect(status: .off)
-        Task.detached {
+        forgetting = Task.detached {
+            await previous?.value
             let issued = await pending?.value
             for credential in Set([cached ?? NotchT3Credential.load(), issued].compactMap { $0?.sessionID }) {
                 _ = try? NotchT3CLI.run(["auth", "session", "revoke", credential])
@@ -196,7 +206,9 @@ final class NotchT3: ObservableObject {
     /// Keychain is read off the main thread: macOS may hold the read behind a password prompt.
     private func credential() async -> NotchT3Credential? {
         if let credentialCache { return credentialCache }
-        let issuance = issuing ?? Task.detached { () -> NotchT3Credential? in
+        let generation = credentialGeneration
+        let issuance = issuing ?? Task.detached { [forgetting] () -> NotchT3Credential? in
+            await forgetting?.value
             if let stored = NotchT3Credential.load() { return stored }
             guard let output = try? NotchT3CLI.run(["auth", "session", "issue", "--label", "Eclipse", "--ttl", "365d", "--json"]),
                   let credential = try? JSONDecoder().decode(NotchT3Credential.self, from: output) else { return nil }
@@ -206,7 +218,9 @@ final class NotchT3: ObservableObject {
         }
         issuing = issuance
         let credential = await issuance.value
-        issuing = nil
+        if issuing == issuance { issuing = nil }
+        // Forget ran meanwhile and revokes this credential.
+        guard generation == credentialGeneration else { return nil }
         if let credential {
             credentialCache = credential
         } else {
@@ -318,10 +332,13 @@ final class NotchT3: ObservableObject {
         var request = URLRequest(url: origin.appending(path: "api/orchestration/threads/\(id)/bounded"))
         request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization")
         request.setValue("2", forHTTPHeaderField: "x-t3-orchestration-protocol")
+        let started = link
         Task {
             defer {
-                fetching.remove(id)
-                if refetch.remove(id) != nil { fetchDetail(id) }
+                if link == started {
+                    fetching.remove(id)
+                    if refetch.remove(id) != nil { fetchDetail(id) }
+                }
             }
             guard let (data, response) = try? await session.data(for: request),
                   (response as? HTTPURLResponse)?.statusCode == 200 else { return }
@@ -334,7 +351,9 @@ final class NotchT3: ObservableObject {
                 detail.imageFiles = Self.files(for: detail.images)
                 return detail
             }.value
-            if let detail, details[id] != detail { details[id] = detail }
+            // A detail for a connection that dropped, or a thread that left the list, is stale.
+            guard link == started, tracker.threads[id] != nil, let detail, details[id] != detail else { return }
+            details[id] = detail
         }
     }
 
@@ -407,6 +426,9 @@ final class NotchT3: ObservableObject {
     }
 
     private func drop() {
+        link += 1
+        fetching.removeAll()
+        refetch.removeAll()
         shellRequest = nil
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
@@ -473,19 +495,11 @@ enum NotchT3CLI {
             throw Failure.notInstalled
         }
         let script = app.appending(path: "Contents/Resources/app.asar/apps/server/dist/bin.mjs")
-        let process = Process()
-        process.executableURL = executable
-        process.arguments = [script.path] + arguments
-        process.environment = ProcessInfo.processInfo.environment.merging(["ELECTRON_RUN_AS_NODE": "1"]) { $1 }
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        try process.run()
+        let environment = ProcessInfo.processInfo.environment.merging(["ELECTRON_RUN_AS_NODE": "1"]) { $1 }
         // A CLI stuck on a locked database must not hold Connect forever.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 30) { if process.isRunning { process.terminate() } }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { throw Failure.failed(process.terminationStatus) }
-        return data
+        let result = try NotchProcess(executable: executable, arguments: [script.path] + arguments, environment: environment)
+            .run(timeout: 30)
+        guard result.status == 0, !result.signalled else { throw Failure.failed(result.status) }
+        return result.output
     }
 }

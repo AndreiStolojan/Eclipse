@@ -125,6 +125,8 @@ final class NotchTravel: NSObject, ObservableObject {
         var plan = decide()
         if !plan.measure.isEmpty {
             let here = await currentLocation()
+            // A newer plan replaced this one while the fix came in; it searches and routes for itself.
+            guard !Task.isCancelled else { return nil }
             for event in plan.measure {
                 let key = NotchTripKey(event)
                 let measure = await measure(event, key: key, from: here, previous: measures[key])

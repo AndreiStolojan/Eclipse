@@ -426,14 +426,17 @@ final class NotchSpotifyAccount {
         }
     }
 
-    /// Sends over HTTPS only, and turns a 429 into a pause of every call for its Retry-After, 5 s when it gives none.
+    /// Sends over HTTPS only, and turns a 429 into a pause of every call for its Retry-After, held between 1 s and an
+    /// hour, 5 s when it gives no finite number of seconds.
     private func send(_ request: URLRequest) async throws(NotchSpotifyFailure) -> (Int, Data) {
         guard request.url?.scheme == "https" else { throw .failed }
         if let retryAt, now() < retryAt { throw .rateLimited }
         guard let (data, response) = try? await transport(request), let http = response as? HTTPURLResponse else { throw .failed }
         if http.statusCode == 429 {
-            let wait = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init) ?? 5
-            retryAt = now().addingTimeInterval(min(max(wait, 1), 3600))
+            // "inf" and "nan" parse as numbers; neither may reach the date or Int, which traps on them.
+            let asked = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init).flatMap { $0.isFinite ? $0 : nil }
+            let wait = min(max(asked ?? 5, 1), 3600)
+            retryAt = now().addingTimeInterval(wait)
             log.notice("Spotify asked to wait \(Int(wait)) s")
             throw .rateLimited
         }

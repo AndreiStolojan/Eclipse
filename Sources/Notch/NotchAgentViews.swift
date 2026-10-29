@@ -339,7 +339,11 @@ private struct NotchAgentThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         // A hairline keeps a dark screenshot from melting into the black notch.
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
-        .task(id: url) { image = await NotchThumbnails.load(url) }
+        .task(id: url) {
+            let loaded = await NotchThumbnails.load(url)
+            guard !Task.isCancelled else { return }
+            image = loaded
+        }
     }
 }
 

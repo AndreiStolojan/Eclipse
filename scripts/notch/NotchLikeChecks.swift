@@ -239,6 +239,17 @@ struct NotchLikeChecks {
         server.reply(200, "[true]")
         reply = await like(toggle: false)
         check(reply == .liked(true) && server.requests.count == 1, "Calls resume once it passed")
+        // A Retry-After that is not a finite number of seconds, or out of range, never traps and is held to 1 s..1 h.
+        for (header, wait) in [("inf", 5.0), ("nan", 5), ("-inf", 5), ("1e300", 3600), ("0", 1)] {
+            let limited = FakeSpotify()
+            limited.reply(429, headers: ["Retry-After": header])
+            let limitedAccount = NotchSpotifyAccount(store: .memory(NotchSpotifyTokens(access: "L", refresh: "R", expires: now + 3600)),
+                                                     transport: limited.transport, consent: { _ in nil }, now: { now })
+            let failure: NotchSpotifyFailure? = await {
+                do throws(NotchSpotifyFailure) { _ = try await limitedAccount.saved(id); return nil } catch { return error }
+            }()
+            check(failure == .rateLimited && limitedAccount.retryAt == now + wait, "A Retry-After of \(header) waits \(Int(wait)) s")
+        }
         server.reset()
         server.reply(401)
         server.reply(400, #"{"error":"invalid_grant"}"#)
@@ -348,15 +359,21 @@ struct NotchLikeChecks {
         }
         final class Box: @unchecked Sendable { var replies: [(Int, String)] = []; var busy: NotchSpotifyCallback?? }
         let box = Box()
+        let completed = DispatchGroup()
+        completed.enter()
         let heard = await NotchSpotifyLoopback.listen(state: "S1", timeout: 10) {
             Task.detached {
+                defer { completed.leave() }
                 box.busy = .some(await NotchSpotifyLoopback.listen(state: "S2", timeout: 10) {})
                 box.replies.append(await get("/favicon.ico"))
                 box.replies.append(await get("/callback?code=OLD&state=S0"))
                 box.replies.append(await get("/callback?code=C9&state=S1"))
             }
         }
-        try? await Task.sleep(for: .milliseconds(300))
+        check(heard == .code("C9"), "The listener receives the valid callback")
+        // The listener resumes before the client necessarily finishes receiving its reply. Join that client before
+        // reading its results; a fixed sleep neither synchronizes Box nor proves the last response has arrived.
+        await Task.detached { completed.wait() }.value
         check(heard == .code("C9") && box.replies.map(\.0) == [404, 400, 200]
               && box.replies.last?.1.contains("You can close this tab") == true,
               "The listener refuses a wrong state with a 400, waits on, answers the valid callback and stops")

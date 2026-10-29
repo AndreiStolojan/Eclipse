@@ -63,14 +63,14 @@ grep -qx "Identifier=$bundle_id" <<< "$signature" || { echo "The app is not sign
 if grep -qE '^(# )?designated => identifier "[^"]+"$' <<< "$signature"; then
     echo "The app's designated requirement names only its bundle ID." >&2; exit 1
 fi
-# No signed part of the release may be debuggable: the app, its frameworks, and any helper inside it.
+# No signed part of the release may be debuggable: the app, its frameworks, and any helper inside it, at any depth.
 while IFS= read -r -d '' code; do
     entitlements="$(codesign --display --entitlements - --xml "$code" 2>/dev/null || true)"
     if grep -q 'com.apple.security.get-task-allow' <<< "$entitlements"; then
         echo "$code is signed with get-task-allow." >&2; exit 1
     fi
-done < <(find "$app_path" "$app_path/Contents/Frameworks" -maxdepth 1 \( -name '*.app' -o -name '*.framework' \
-    -o -name '*.dylib' -o -name '*.xpc' -o -name '*.appex' \) -print0)
+done < <(find "$app_path" \( -name '*.app' -o -name '*.framework' -o -name '*.dylib' -o -name '*.xpc' \
+    -o -name '*.appex' \) -print0)
 echo "Built: $app_path"
 # The notch CLI shares the socket parser with the app; it is not part of the app bundle. See docs/socket.md.
 swiftc -O "$repo_dir/Sources/Notch/NotchMessage.swift" "$repo_dir/Tools/notch/main.swift" -o "$repo_dir/.build/notch"
