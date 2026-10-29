@@ -48,7 +48,10 @@ struct NotchScreenshotPeek: View {
             preview = NotchImagePreview.cached(url)
             loaded = preview != nil
             guard !loaded else { return }
-            preview = await NotchImagePreview.load(url)
+            let made = await NotchImagePreview.load(url)
+            // The decode runs detached and ignores cancellation, so a newer screenshot's preview may already be shown.
+            guard !Task.isCancelled else { return }
+            preview = made
             loaded = true
         }
     }
@@ -96,7 +99,8 @@ struct NotchScreenshotPeek: View {
 }
 
 /// A downsampled copy of an image file and its full pixel size, for the screenshot peek and image tiles on the
-/// shelf. ImageIO decodes only what the thumbnail needs, off the main thread, once per file; a small cache keeps it.
+/// shelf. ImageIO decodes only what the thumbnail needs, off the main thread, once per file version; a small cache
+/// keeps it.
 final class NotchImagePreview: Sendable {
     let image: CGImage
     let pixelSize: CGSize
@@ -108,18 +112,24 @@ final class NotchImagePreview: Sendable {
 
     /// Long side in pixels: the peek's 110 pt slot at 2x, with a little room.
     private static let maxPixels = 256
-    private static let cache: NSCache<NSURL, NotchImagePreview> = {
-        let cache = NSCache<NSURL, NotchImagePreview>()
+    /// Keyed by path and modification date, so a shelved image saved again gets a new preview.
+    private static let cache: NSCache<NSString, NotchImagePreview> = {
+        let cache = NSCache<NSString, NotchImagePreview>()
         cache.countLimit = 64
         return cache
     }()
+
+    private static func key(_ url: URL) -> NSString {
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        return "\(url.path)|\(modified?.timeIntervalSince1970 ?? 0)" as NSString
+    }
 
     /// Image files get a preview; everything else, PDFs included, keeps its icon.
     static func isImage(_ url: URL) -> Bool {
         UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
     }
 
-    static func cached(_ url: URL) -> NotchImagePreview? { cache.object(forKey: url as NSURL) }
+    static func cached(_ url: URL) -> NotchImagePreview? { cache.object(forKey: key(url)) }
 
     /// The cached preview, or one made in the background; nil for other files and unreadable images.
     static func load(_ url: URL) async -> NotchImagePreview? {
@@ -130,6 +140,8 @@ final class NotchImagePreview: Sendable {
     /// Makes and caches a preview on the calling thread. Views use `load`; fixtures call this directly.
     @discardableResult
     static func make(_ url: URL) -> NotchImagePreview? {
+        // Decode and cache under the version observed before opening the file, even if it is saved again meanwhile.
+        let version = key(url)
         let options = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
                        kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true] as CFDictionary
         guard isImage(url), let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -138,7 +150,7 @@ final class NotchImagePreview: Sendable {
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else { return nil }
         let preview = NotchImagePreview(image: image, pixelSize: CGSize(width: width, height: height))
-        cache.setObject(preview, forKey: url as NSURL)
+        cache.setObject(preview, forKey: version)
         return preview
     }
 }

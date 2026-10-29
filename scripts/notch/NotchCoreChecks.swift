@@ -485,6 +485,20 @@ struct NotchCoreChecks {
             return await NotchWebSites.osascript("return 1").error
         }
         check(unlaunched.value == "Cancelled", "A cancelled task launches no script")
+        // A child process ends within its deadline whatever it does with signals, pipes or output.
+        func shell(_ script: String, timeout: TimeInterval) -> (outcome: NotchProcess.Outcome?, seconds: Double) {
+            let start = Date()
+            let outcome = try? NotchProcess(executable: URL(fileURLWithPath: "/bin/sh"), arguments: ["-c", script]).run(timeout: timeout)
+            return (outcome, Date().timeIntervalSince(start))
+        }
+        let stubborn = shell("trap '' TERM; while :; do sleep 0.1; done", timeout: 0.3)
+        check(stubborn.outcome?.signalled == true && stubborn.seconds < 3, "A child that ignores SIGTERM is killed")
+        let lingering = shell("sleep 30 & echo ready", timeout: 10)
+        check(lingering.outcome.map { $0.status == 0 && String(decoding: $0.output, as: UTF8.self) == "ready\n" } == true
+              && lingering.seconds < 3, "A descendant holding the pipe open does not hold the caller")
+        let chatty = shell("head -c 300000 /dev/zero; head -c 300000 /dev/zero >&2", timeout: 10)
+        check(chatty.outcome.map { $0.status == 0 && $0.output.count == 300_000 && $0.errors.count == 300_000 } == true,
+              "Output beyond a pipe's buffer on both streams never stalls the child")
         // Only an allowed or undecided target runs the script, so one that quit is never launched by a background read.
         let quit = blocking { await NotchWebSites.osascript("return 1", automating: "ro.andrei.NotchLab.never-running") }
         check(quit.value.status == procNotFound && quit.value.output.isEmpty, "A target that is not running gets no script")

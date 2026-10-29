@@ -8,7 +8,7 @@ While the Mac is locked, Eclipse shows a lock in the left wing of the closed not
 
 | Signal | Source | Effect |
 | --- | --- | --- |
-| `com.apple.screenIsLocked`, `com.apple.screenIsUnlocked` | distributed notifications | when to read the lock state; they can arrive late or out of order, so the session dictionary below decides, and is read once more 0.5 s later if it disagrees |
+| `com.apple.screenIsLocked`, `com.apple.screenIsUnlocked` | distributed notifications | when to read the lock state; they can arrive late or out of order, so the session dictionary below decides. If it disagrees, Eclipse checks again after pauses of 0.5, 1 and 2 s, stopping once it agrees. |
 | `com.apple.screensaver.didstart`, `didstop` | distributed notifications | windows down while the screen saver runs |
 | `NSWorkspace.willSleep`, `didWake` | workspace | windows down while asleep; on wake the lock state is read again |
 | `NSWorkspace.screensDidSleep`, `screensDidWake` | workspace | windows down while the displays are off |

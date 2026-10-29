@@ -935,8 +935,11 @@ struct NotchLabApp {
             bundleIdentifier: "com.spotify.client", timestampEpochMicros: Date().timeIntervalSince1970 * 1_000_000,
             shuffleMode: nil, repeatMode: nil, playbackRate: 1)), defaults: defaults)
         preview.geometry = geometry
-        let screenshot = fixtureScreenshot()
-        defer { try? FileManager.default.removeItem(at: screenshot) }
+        // Keep the fixture names stable in renders without overwriting files already in the temporary directory.
+        let fixtures = FileManager.default.temporaryDirectory.appending(path: "eclipse-render-\(UUID().uuidString)")
+        do { try FileManager.default.createDirectory(at: fixtures, withIntermediateDirectories: false) } catch { return }
+        defer { try? FileManager.default.removeItem(at: fixtures) }
+        let screenshot = fixtureScreenshot(in: fixtures)
         NotchImagePreview.make(screenshot)
         preview.shelf.add([Bundle.main.bundleURL, URL(fileURLWithPath: "/etc/hosts"),
                            URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"), screenshot])
@@ -945,9 +948,8 @@ struct NotchLabApp {
         preview.show(.shelf)
         render(preview, name: "native-expanded-shelf", in: directory)
         // The README's shelf: a screenshot and a note, nothing from this Mac.
-        let notes = FileManager.default.temporaryDirectory.appending(path: "notes.md")
+        let notes = fixtures.appending(path: "notes.md")
         try? Data("# Notes\n".utf8).write(to: notes)
-        defer { try? FileManager.default.removeItem(at: notes) }
         preview.shelf.removeAll()
         preview.shelf.add([screenshot, notes])
         renderScene(preview, name: "readme-shelf", in: directory)
@@ -1004,8 +1006,8 @@ struct NotchLabApp {
     }
 
     /// A stand-in screenshot, 1512 × 982 pixels: a desktop gradient with a light document window and a dark one.
-    private static func fixtureScreenshot() -> URL {
-        let url = FileManager.default.temporaryDirectory.appending(path: "Screenshot 2026-10-03 at 11.08.14.png")
+    private static func fixtureScreenshot(in folder: URL) -> URL {
+        let url = folder.appending(path: "Screenshot 2026-10-03 at 11.08.14.png")
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1512, pixelsHigh: 982, bitsPerSample: 8,
                                             samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                             bytesPerRow: 0, bitsPerPixel: 0) else { return url }
@@ -1027,7 +1029,26 @@ struct NotchLabApp {
     /// Read-only diagnostics run hidden, without touching the user's playback or keyboard focus.
     @MainActor
     private static func probe() {
-        let experience = NotchExperience()
+        // Diagnostics read the app's settings but never write them or start opt-in integrations, permission prompts,
+        // clipboard capture, folder watches or a persisted timer. Service observations stay in a disposable suite.
+        let suite = "ro.andrei.NotchLab.Probe.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var settings = NotchSettings.load(from: .standard)
+        settings.replaceSystemHUD = false
+        settings.capsLockHUD = false
+        settings.sottoLinked = false
+        settings.scriptNotices = false
+        settings.t3Linked = false
+        settings.clipboardHistory = false
+        settings.screenshotThumbnail = false
+        settings.shelveScreenshots = false
+        settings.downloadAlerts = false
+        settings.timeToLeave = false
+        settings.timer = false
+        settings.save(to: defaults)
+        let experience = NotchExperience(defaults: defaults)
+        experience.media.webLookupsPaused = true
         let controller = NotchWindowController(experience: experience)
         experience.hidden = true
         let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier

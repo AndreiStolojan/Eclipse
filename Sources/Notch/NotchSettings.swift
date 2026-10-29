@@ -264,14 +264,54 @@ struct NotchSettings: Equatable, Codable {
         }
     }
 
-    /// Stored values overlay the defaults, so settings added later decode without a migration step.
+    /// The settings sliders' ranges (NotchAppView). A stored value outside its range, edited by hand or written by
+    /// another build, is pulled back in on load, so code such as `Int(clipboardLimit)` never sees an absurd number.
+    static var ranges: [(WritableKeyPath<NotchSettings, Double>, ClosedRange<Double>)] { [
+        (\.expandedWidth, 260...600), (\.expandedHeight, 120...260), (\.cornerRadius, 8...40), (\.wingWidth, 24...80),
+        (\.dictationPillScale, 0.9...1.5), (\.dictationBarScale, 0.8...1.8),
+        (\.hoverOpenDelay, 0...0.5), (\.hoverCloseDelay, 0...0.5),
+        (\.openAnimationDuration, 0.2...1), (\.closeAnimationDuration, 0.15...0.8), (\.openAnimationBounce, 0...0.4),
+        (\.hudDuration, 0.5...5), (\.batteryDuration, 1...10), (\.audioDeviceDuration, 1...10), (\.peekDuration, 1...8),
+        (\.clipboardLimit, 5...50), (\.downloadDuration, 2...10),
+        (\.calendarLead, 5...60), (\.calendarPeekDuration, 1...10), (\.leaveBuffer, 0...30), (\.leaveDuration, 2...15),
+        (\.timerDoneDuration, 5...120),
+        (\.agentAlertDuration, 1...5), (\.agentAlertScale, 0.9...1.4), (\.agentPageScale, 0.9...1.4),
+        (\.simulatedNotchWidth, 100...260), (\.lockScreenDimming, 0...0.8),
+        // NotchLockScreenLayout.offsetRange, written out because the logic checks build this file without it.
+        (\.lockScreenWidgetOffset, -160...24),
+    ] }
+
+    /// Stored values overlay the defaults. A malformed field falls back individually, preserving unrelated settings;
+    /// numbers are then clamped to `ranges`. Each failed field is replaced at most once.
     static func load(from defaults: UserDefaults) -> NotchSettings {
         guard let data = defaults.data(forKey: key),
               let stored = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let fallback = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(NotchSettings())) as? [String: Any],
-              let merged = try? JSONSerialization.data(withJSONObject: fallback.merging(stored) { $1 }),
-              let settings = try? JSONDecoder().decode(NotchSettings.self, from: merged) else { return NotchSettings() }
-        return settings
+              let fallback = try? JSONSerialization.jsonObject(with: JSONEncoder().encode(NotchSettings())) as? [String: Any]
+        else { return NotchSettings() }
+        var values = fallback.merging(stored) { $1 }
+        var rejected = Set<String>()
+        while let merged = try? JSONSerialization.data(withJSONObject: values) {
+            do {
+                var settings = try JSONDecoder().decode(NotchSettings.self, from: merged)
+                for (path, range) in ranges {
+                    settings[keyPath: path] = min(max(settings[keyPath: path], range.lowerBound), range.upperBound)
+                }
+                return settings
+            } catch let error as DecodingError {
+                let context: DecodingError.Context
+                switch error {
+                case .typeMismatch(_, let found), .valueNotFound(_, let found), .keyNotFound(_, let found),
+                     .dataCorrupted(let found): context = found
+                @unknown default: return NotchSettings()
+                }
+                guard let field = context.codingPath.first?.stringValue, let replacement = fallback[field],
+                      rejected.insert(field).inserted else { return NotchSettings() }
+                values[field] = replacement
+            } catch {
+                return NotchSettings()
+            }
+        }
+        return NotchSettings()
     }
 
     func save(to defaults: UserDefaults) {

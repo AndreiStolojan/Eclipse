@@ -70,6 +70,7 @@ enum NotchThumbnails {
     /// Decodes and caches at once; fixture rendering calls it so the thumbnails are there before the snapshot.
     @discardableResult
     static func loadNow(_ url: URL) -> NSImage? {
+        let version = key(url)
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                   kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -77,7 +78,7 @@ enum NotchThumbnails {
                   kCGImageSourceThumbnailMaxPixelSize: 160,
               ] as CFDictionary) else { return nil }
         let image = NSImage(cgImage: cgImage, size: .zero)
-        cache.setObject(image, forKey: key(url))
+        cache.setObject(image, forKey: version)
         return image
     }
 }

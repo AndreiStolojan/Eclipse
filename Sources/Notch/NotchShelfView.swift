@@ -277,7 +277,9 @@ private struct NotchShelfTile: View {
         .accessibilityAction(named: "Remove from shelf", remove)
         .task(id: item.url) {
             guard NotchImagePreview.isImage(item.url) else { preview = nil; return }
-            preview = await NotchImagePreview.load(item.url)
+            let made = await NotchImagePreview.load(item.url)
+            guard !Task.isCancelled else { return }
+            preview = made
         }
     }
 
